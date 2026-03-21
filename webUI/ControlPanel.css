@@ -8,7 +8,7 @@
 * General Precision LGP-21 Emulator Control Panel style sheet.
 ************************************************************************
 * 2026-03-17  P.Kimpel
-*   Original version, from retro-1620/ControlPanel.css.
+*   Original version, from retro-1620 ControlPanel.css.
 ***********************************************************************/
 
 BODY {
@@ -80,11 +80,6 @@ BODY {
     width:              26vw;
     max-width:          260px;
     transform:          translate(-50%, -50%)}
-#ScopeView TR TD {
-    height:             2.4vw;
-    width:              100%}
-#ScopeView TR TD.traceView {
-    background-color:   #006400}
 
 #ControlsFrame {
     position:           absolute;
@@ -104,8 +99,8 @@ BODY {
     top:                50%;
     left:               50%;
     height:             75%;
-    width:              75%;
-    max-width:          480px;
+    width:              90%;
+    max-width:          560px;
     transform:          translate(-50%, -50%);
     background-color:   var(--darkGrey);
     border:             1px solid #999;
@@ -185,7 +180,6 @@ BODY {
     width:              75%;
     max-width:          480px;
     transform:          translate(-50%, -50%);
-    container-type:     inline-size;
     background-color:   var(--offWhite);
     border:             1px solid #CCC;
     box-shadow:         1px 1px 1px #999}
