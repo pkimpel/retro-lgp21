@@ -1,0 +1,271 @@
+/***********************************************************************
+* retro-lgp21/webUI ControlPanel.css
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 Emulator Control Panel style sheet.
+************************************************************************
+* 2026-03-17  P.Kimpel
+*   Original version, from retro-1620/ControlPanel.css.
+***********************************************************************/
+
+BODY {
+    position:           relative;
+    height:             100%;
+    width:              100%;
+    background-color:   white;
+    overflow:           hidden}
+
+#LogoRow {
+    position:           absolute;
+    top:                0;
+    height:             40px;
+    width:              100%}
+#GPLogoTurquoise {
+    position:           absolute;
+    left:               40px;
+    top:                50%;
+    height:             90%;
+    transform:          translate(0, -50%)}
+#LGP21Logo {
+    position:           absolute;
+    left:               120px;
+    top:                50%;
+    height:             33%;
+    transform:          translate(0, -50%)}
+
+#MainRow {
+    position:           absolute;
+    top:                44px;
+    height:             400px;
+    width:              calc(100vw - 8px);
+    border:             4px solid silver}
+
+#ScopeFrame {
+    position:           absolute;
+    top:                0;
+    height:             100%;
+    width:              40vw;
+    background-color:   var(--turquoise)}
+#ScopeShroud {
+    position:           absolute;
+    top:                50%;
+    left:               50%;
+    height:             36vw;
+    width:              36vw;
+    max-height:         360px;
+    max-width:          360px;
+    transform:          translate(-50%, -50%);
+    background-image:   linear-gradient(to bottom right, #121, #232);
+    border-radius:      50%;
+    border:             2px solid #999;
+    box-shadow:         8px 8px 8px #333}
+#ScopeScreen {
+    position:           absolute;
+    top:                50%;
+    left:               50%;
+    height:             32vw;
+    width:              32vw;
+    max-height:         320px;
+    max-width:          320px;
+    transform:          translate(-50%, -50%);
+    background-image:   radial-gradient(#232, #010);
+    border-radius:      50%}
+#ScopeView {
+    position:           absolute;
+    left:               50%;
+    top:                50%;
+    width:              26vw;
+    max-width:          260px;
+    transform:          translate(-50%, -50%)}
+#ScopeView TR TD {
+    height:             2.4vw;
+    width:              100%}
+#ScopeView TR TD.traceView {
+    background-color:   #006400}
+
+#ControlsFrame {
+    position:           absolute;
+    top:                0;
+    left:               40vw;
+    right:              0;
+    height:             100%;
+    border-left:        4px solid silver}
+#GrayFrame {
+    position:           absolute;
+    top:                0;
+    height:             45%;
+    width:              100%;
+    background-color:   var(--darkGrey)}
+#SwitchFrame {
+    position:           absolute;
+    top:                50%;
+    left:               50%;
+    height:             75%;
+    width:              75%;
+    max-width:          480px;
+    transform:          translate(-50%, -50%);
+    background-color:   var(--darkGrey);
+    border:             1px solid #999;
+    box-shadow:         inset 8px 8px 8px #333}
+#BS4Caption,
+#BS4CaptionTL,
+#BS4CaptionBL,
+#BS4Switch {
+    left:               16%;
+    top:                30%}
+#BS8Caption,
+#BS8CaptionTL,
+#BS8CaptionBL,
+#BS8Switch {
+    left:               32%;
+    top:                30%}
+#BS16Caption,
+#BS16CaptionTL,
+#BS16CaptionBL,
+#BS16Switch {
+    left:               16%;
+    top:                70%}
+#BS32Caption,
+#BS32CaptionTL,
+#BS32CaptionBL,
+#BS32Switch {
+    left:               32%;
+    top:                70%}
+#TCCaption,
+#TCCaptionTL,
+#TCCaptionBL,
+#TCSwitch {
+    left:               48%;
+    top:                50%}
+#ModeCaption,
+#ModeCaptionTL,
+#ModeCaptionML,
+#ModeCaptionBL,
+#ModeSwitch {
+    left:               67%;
+    top:                50%}
+#ModeCaption {
+    transform:          translate(-50%, 24px)}
+#ModeCaptionTL {
+    transform:          translate(-60px, -32px)}
+#ModeCaptionML {
+    transform:          translate(-60px, -50%)}
+#ModeCaptionBL {
+    transform:          translate(-60px, 14px)}
+#ExecuteBtnCaption,
+#ExecuteBtn {
+    left:               85%;
+    top:                28%;
+    transform:          translate(-50%, -50%)}
+#ExecuteBtnCaption {
+    transform:          translate(calc(-100% - 20px), -50%)}
+#FillClearBtnCaption,
+#FillClearBtn {
+    left:               85%;
+    top:                72%;
+    transform:          translate(-50%, -50%)}
+#FillClearBtnCaption {
+    transform:          translate(calc(-100% - 20px), -50%)}
+
+#WhiteFrame {
+    position:           absolute;
+    bottom:             0;
+    height:             55%;
+    width:              100%;
+    background-color:   var(--offWhite);
+    box-shadow:         inset 4px 4px 4px #333}
+#ButtonFrame {
+    position:           absolute;
+    top:                38%;
+    left:               50%;
+    height:             36%;
+    width:              75%;
+    max-width:          480px;
+    transform:          translate(-50%, -50%);
+    container-type:     inline-size;
+    background-color:   var(--offWhite);
+    border:             1px solid #CCC;
+    box-shadow:         1px 1px 1px #999}
+#PowerBtn {
+    position:           absolute;
+    left:               16%;
+    top:                50%;
+    transform:          translate(-50%, -50%)}
+#IOBtn {
+    position:           absolute;
+    left:               39%;
+    top:                50%;
+    transform:          translate(-50%, -50%)}
+#StopBtn {
+    position:           absolute;
+    left:               61%;
+    top:                50%;
+    transform:          translate(-50%, -50%)}
+#StartBtn {
+    position:           absolute;
+    left:               84%;
+    top:                50%;
+    transform:          translate(-50%, -50%)}
+#GPLogoBlue {
+    position:           absolute;
+    left:               12.5%;
+    bottom:             22%;
+    width:              10.6%;
+    transform:          translate(-50%, 50%)}
+#LGP21LogoType {
+    position:           absolute;
+    left:               59%;
+    bottom:             22%;
+    width:              70%;
+    transform:          translate(-50%, 50%)}
+
+
+.squareButton {
+    position:           absolute;
+    height:             44px;
+    width:              44px;
+    background-color:   #CCC;
+    color:              black;
+    font-family:        DejaVuSansWeb;
+    font-weight:        bold;
+    font-size:          8px;
+    padding:            2px;
+    border-radius:      4px;
+    border:             3px solid black}
+.redButton {
+    background-color:   #FCC;
+    color:              white}
+
+
+.powerUp {
+    animation-name:     powerUpAnimation;
+    animation-duration: 4s;
+    animation-timing-function: ease-in;
+    animation-direction:normal;
+    animation-fill-mode:forwards}
+
+.powerDown {
+    animation-name:     powerUpAnimation;
+    animation-duration: 2s;
+    animation-timing-function: ease-in;
+    animation-direction:reverse;
+    animation-fill-mode:forwards}
+
+@keyframes powerUpAnimation {
+    from {
+        opacity:        0}
+    to {
+        opacity:        1}
+    }
+
+
+
+#VersionDiv {
+    position:           absolute;
+    right:              8px;
+    bottom:             4px;
+    font-size:          10px;
+    color:              black}

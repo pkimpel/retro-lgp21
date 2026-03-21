@@ -1,0 +1,247 @@
+/***********************************************************************
+* retro-lpg21/webUI Common.css
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LPG-21 emulator common style sheet.
+************************************************************************
+* 2026-03-14  P.Kimpel
+*   Original version, from retro-g15/Common.css
+***********************************************************************/
+
+@font-face {
+    font-family: "DejaVuSansMonoBookWeb";
+    src: url("./resources/DejaVuSansMono-webfont.woff") format("woff"),
+         url("./resources/DejaVuSansMono-webfont.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "DejaVuSansWeb";
+    src: url("./resources/DejaVuSans-webfont.woff") format("woff"),
+         url("./resources/DejaVuSans-webfont.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "DejaVuSansWeb";
+    src: url("./resources/DejaVuSans-Bold-webfont.woff") format("woff"),
+         url("./resources/DejaVuSans-Bold-webfont.ttf") format("truetype");
+    font-weight: bold;
+    font-style: normal;
+}
+
+HTML {
+    height:             100%;
+    --turquoise:        #55DDEE;
+    --grecianGrey:      #dacfbe;
+    --darkGrey:         #666666;
+    --offWhite:         #F9F9F9}
+
+BODY {
+    font-family:        DejaVuSansWeb, sans-serif;
+    font-size:          10pt;
+    background-color:   white;
+    color:              black;
+    height:             calc(100% - 16px);
+    margin:             4px;
+    padding:            4px}
+
+BODY.panelBody {
+    position:           relative;
+    font-size:          8pt;
+    margin:             0;
+    padding:            0;
+    cursor:             default}
+
+BODY.deviceBody {
+    font-size:          7pt;
+    overflow:           hidden;
+    margin:             0;
+    padding:            0;
+    background-color:   #246;
+    color:              white;
+    cursor:             default}
+
+H1 {
+    margin-top:         2em;
+    margin-bottom:      1em;
+    font-size:          14pt;
+    font-weight:        bold}
+
+PRE.paper,
+IFRAME.paper {
+    font-family:        DejaVuSansMonoBookWeb, monospace;
+    font-size:          12px;
+    line-height:        120%;
+    color:              black;
+    background-color:   white}
+
+PRE {
+    font-family:        DejaVuSansMonoBookWeb, monospace}
+PRE.paper {
+    margin-top:         0;
+    margin-bottom:      0;
+    font-size:          12px}
+
+INPUT[type=text] {
+    font-family:        DejaVuSansMonoBookWeb, monospace;
+    font-size:          8pt}
+
+DIV.paper {
+    font-family:        DejaVuSansMonoBookWeb, monospace;
+    white-space:        pre;
+    margin-top:         0;
+    margin-bottom:      0;
+    font-size:          12px;
+    line-height:        12pt}
+DIV.topOfForm {
+    page-break-before:  always;
+    margin-top:         1px;
+    padding-top:        1px;
+    border-top:         1px dashed black}
+
+DIV.caption {
+    position:           absolute;
+    z-index:            1;
+    font-size:          12px;
+    font-weight:        normal;
+    line-height:        100%;
+    text-align:         center}
+DIV.redLit1 {
+    background-image:   radial-gradient(circle, #A00, #900, #400)}
+DIV.redLit2 {
+    background-image:   radial-gradient(circle, #B00, #A00, #500)}
+DIV.redLit3 {
+    background-image:   radial-gradient(circle, #C00, #B00, #600)}
+DIV.redLit4 {
+    background-image:   radial-gradient(circle, #D00, #C00, #700)}
+DIV.redLit5 {
+    background-image:   radial-gradient(circle, #E00, #D00, #800)}
+DIV.redLit {
+    background-image:   radial-gradient(circle, #F00, #E00, #900)}
+
+DIV.blackButton1 {
+    position:           absolute;
+    width:              14px;
+    height:             14px;
+    font-size:          4px;
+    background-image:   radial-gradient(circle, #030, #000);
+    border-radius:      50%;
+    border:             10px solid silver}
+DIV.redButton1 {
+    position:           absolute;
+    width:              14px;
+    height:             14px;
+    font-size:          4px;
+    background-image:   radial-gradient(circle, #F00, #C00);
+    border-radius:      50%;
+    border:             10px solid silver}
+
+IMG.toggleSwitch {
+    position:           absolute;
+    width:              24px;
+    transform:          translate(-50%, -50%)}
+IMG.toggleLarge {
+    width:              36px}
+DIV.toggleCaption {
+    position:           absolute;
+    line-height:        1;
+    transform:          translate(-50%, 18px);
+    text-align:         center;
+    font-size:          10px;
+    color:              white}
+DIV.toggleCaptionTopLeft {
+    position:           absolute;
+    width:              8ch;
+    line-height:        1;
+    transform:          translate(-50px, -18px);
+    text-align:         right;
+    font-size:          8px;
+    color:              white}
+DIV.toggleCaptionMiddleLeft {
+    position:           absolute;
+    width:              8ch;
+    line-height:        1;
+    transform:          translate(-50px, -50%);
+    text-align:         right;
+    font-size:          8px;
+    color:              white}
+DIV.toggleCaptionBottomLeft {
+    position:           absolute;
+    width:              8ch;
+    line-height:        1;
+    transform:          translate(-50px, 7px);
+    text-align:         right;
+    font-size:          8px;
+    color:              white}
+
+BUTTON {
+    font-family:        DejaVuSansWeb, sans-serif;
+    font-size:          10pt;
+    font-weight:        bold;
+    line-height:        120%;
+    width:              60px;
+    height:             32px;
+    padding-left:       0;
+    padding-right:      0;
+    border:             2px solid #DDD;
+    border-radius:      8px}
+
+BUTTON.large {
+    font-family:        DejaVuSansWeb, sans-serif;
+    font-size:          8pt;
+    font-weight:        normal;
+    line-height:        120%;
+    width:              60px;
+    height:             40px;
+    padding-left:       0;
+    padding-right:      0;
+    border:             1px solid #DDD;
+    border-radius:      4px}
+
+BUTTON.redButton {
+    background-image:   radial-gradient(circle, #900, #600);
+    color:              white}
+
+BUTTON.redLit {
+    color:              black;
+    background-image:   radial-gradient(circle, #F00, #F00, #C00)}
+
+BUTTON.blackBorder {
+    border:             1px solid black}
+
+BUTTON.silverBorder {
+    border:             1px solid #DDD}
+
+.annunciator {
+    visibility:         hidden;
+    white-space:        nowrap;
+    font-family:        DejaVuSansWeb, sans-serif;
+    font-size:          7pt;
+    line-height:        100%}
+.annunciatorLit {
+    visibility:         visible}
+.brushedStainless {
+    background-color: #a2a2a2;
+    background: linear-gradient(-45deg, #a2a2a2 0%, #e2e2e2 49%, #a2a2a2 100%)}
+
+
+.active {
+    color:              #F93}           /* neon orange */
+.bold {
+    font-weight:        bold}
+.center {
+    text-align:         center}
+.rj {
+    text-align:         right}
+.data {
+    font-family:        DejaVuSansMonoBookWeb, monospace;
+    text-align:         left}
+.number {
+    font-family:        DejaVuSansMonoBookWeb, monospace;
+    text-align:         right}

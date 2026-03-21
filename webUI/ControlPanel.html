@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>retro-lgp21 Control Panel</title>
+<!--
+/***********************************************************************
+* retro-lgp21/webUI ControlPanel.html
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 Emulator Control Panel page.
+************************************************************************
+* 2026-03-17  P.Kimpel
+*   Original version, from retro-1620/ControlPanel.html.
+***********************************************************************/
+-->
+<meta name="Author" content="Paul Kimpel">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link id=defaultStyleSheet rel=stylesheet type="text/css" href="./Common.css">
+<link id=supervisoryStyleSheet rel=stylesheet type="text/css" href="./ControlPanel.css">
+</head>
+
+<body class=panelBody>
+
+<div id=LogoRow class=brushedStainless>
+    <img id=GPLogoTurquoise src="./resources/General-Precision-Logo-Turquoise.png"
+         alt="General Precision Logo">
+    <img id=LGP21Logo src="./resources/LGP-21-Logo.png" alt="LGP-21 Logo">
+</div>
+
+<div id=MainRow>
+    <div id=ScopeFrame>
+        <div id=ScopeShroud>
+            <div id=ScopeScreen>
+                <table id=ScopeView>
+                <tbody>
+                    <tr>
+                        <td id=ScopeCReg rowspan=2 class=traceView>
+                    <tr>
+                        <td>&nbsp;
+                    <tr>
+                        <td>&nbsp;
+                    <tr>
+                        <td id=ScopeRReg rowspan=2 class=traceView>
+                    <tr>
+                        <td>&nbsp;
+                    <tr>
+                        <td>&nbsp;
+                    <tr>
+                        <td id=ScopeAReg rowspan=2 class=traceView>
+                    <tr>
+                        <td>&nbsp;
+                    <tr>
+                        <td>&nbsp;
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id=ControlsFrame>
+        <div id=GrayFrame>
+            <div id=SwitchFrame>
+                <img id=BS4Switch  class=toggleSwitch src="./resources/ToggleDown.png">
+                <div id=BS4Caption class=toggleCaption>BS-4</div>
+                <div id=BS4CaptionTL class=toggleCaptionTopLeft>ON</div>
+                <div id=BS4CaptionBL class=toggleCaptionBottomLeft>OFF</div>
+
+                <img id=BS8Switch  class=toggleSwitch src="./resources/ToggleDown.png">
+                <div id=BS8Caption class=toggleCaption>BS-8</div>
+                <div id=BS8CaptionTL class=toggleCaptionTopLeft>ON</div>
+                <div id=BS8CaptionBL class=toggleCaptionBottomLeft>OFF</div>
+
+                <img id=BS16Switch class=toggleSwitch src="./resources/ToggleDown.png">
+                <div id=BS16Caption class=toggleCaption>BS-16</div>
+                <div id=BS16CaptionTL class=toggleCaptionTopLeft>ON</div>
+                <div id=BS16CaptionBL class=toggleCaptionBottomLeft>OFF</div>
+
+                <img id=BS32Switch class=toggleSwitch src="./resources/ToggleDown.png">
+                <div id=BS32Caption class=toggleCaption>BS-32</div>
+                <div id=BS32CaptionTL class=toggleCaptionTopLeft>ON</div>
+                <div id=BS32CaptionBL class=toggleCaptionBottomLeft>OFF</div>
+
+                <img id=TCSwitch   class=toggleSwitch src="./resources/ToggleDown.png">
+                <div id=TCCaption class=toggleCaption>TC</div>
+                <div id=TCCaptionTL class=toggleCaptionTopLeft>ON</div>
+                <div id=TCCaptionBL class=toggleCaptionBottomLeft>OFF</div>
+
+                <img id=ModeSwitch class="toggleSwitch toggleLarge" src="./resources/ToggleDown.png">
+                <div id=ModeCaption class=toggleCaption>MODE</div>
+                <div id=ModeCaptionTL class=toggleCaptionTopLeft>MAN<br>INPUT</div>
+                <div id=ModeCaptionML class=toggleCaptionMiddleLeft>ONE<br>CHECK</div>
+                <div id=ModeCaptionBL class=toggleCaptionBottomLeft>NORMAL</div>
+
+                <div id=ExecuteBtn class=blackButton1></div>
+                <div id=ExecuteBtnCaption class=toggleCaption>EXECUTE</div>
+                <div id=FillClearBtn class=blackButton1></div>
+                <div id=FillClearBtnCaption class=toggleCaption>FILL<br>CLEAR</div>
+            </div>
+        </div>
+
+        <div id=WhiteFrame>
+            <div id=ButtonFrame>
+                <button id=PowerBtn class=squareButton>POWER</button>
+                <button id=IOBtn    class=squareButton>I/O</button>
+                <button id=StopBtn  class="squareButton redButton">STOP</button>
+                <button id=StartBtn class=squareButton>START</button>
+            </div>
+            <img id=GPLogoBlue src="./resources/General-Precision-Logo-Blue.png">
+            <img id=LGP21LogoType src="./resources/GP-LGP-21-LogoType.png">
+        <div>
+    </div>
+</div>
+
+</body>
+</html>
