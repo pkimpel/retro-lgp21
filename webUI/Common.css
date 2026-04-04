@@ -1,11 +1,11 @@
 /***********************************************************************
-* retro-lpg21/webUI Common.css
+* retro-lgp21/webUI Common.css
 ************************************************************************
 * Copyright (c) 2026, Paul Kimpel.
 * Licensed under the MIT License, see
 *       http://www.opensource.org/licenses/mit-license.php
 ************************************************************************
-* General Precision LPG-21 emulator common style sheet.
+* General Precision LGP-21 emulator common style sheet.
 ************************************************************************
 * 2026-03-14  P.Kimpel
 *   Original version, from retro-g15 Common.css
@@ -37,6 +37,7 @@
 
 HTML {
     height:             100%;
+    --gpBlue:           #699BCD;
     --turquoise:        #55DDEE;
     --grecianGrey:      #dacfbe;
     --darkGrey:         #666666;
@@ -146,9 +147,9 @@ IMG.toggleSwitch {
     position:           absolute;
     width:              24px;
     transform:          translate(-50%, -50%)}
-IMG.toggleLarge {
+IMG.toggleSwitch.toggleLarge {
     width:              36px}
-DIV.toggleCaption {
+DIV.toggleCaptionMain {
     position:           absolute;
     line-height:        1;
     transform:          translate(-50%, 18px);
@@ -204,19 +205,26 @@ BUTTON.large {
     border:             1px solid #DDD;
     border-radius:      4px}
 
-BUTTON.redButton {
-    background-image:   radial-gradient(circle, #900, #600);
-    color:              white}
-
-BUTTON.redLit {
+BUTTON.squareButton {
+    position:           absolute;
+    height:             48px;
+    width:              48px;
+    background-color:   #CCC;
     color:              black;
-    background-image:   radial-gradient(circle, #F00, #F00, #C00)}
-
-BUTTON.blackBorder {
-    border:             1px solid black}
-
-BUTTON.silverBorder {
-    border:             1px solid #DDD}
+    font-family:        DejaVuSansWeb;
+    font-weight:        bold;
+    font-size:          8px;
+    padding:            2px;
+    border-radius:      4px;
+    border:             4px solid black;
+    box-shadow:         1px 1px 3px #999}
+BUTTON.whiteButtonLit {
+    background-image:   radial-gradient(#FEC 33%, #EDA 75%, #999)}
+BUTTON.redButton {
+    background-image:   radial-gradient(#900, #600);
+    color:              white}
+BUTTON.redButtonLit {
+    background-image:   radial-gradient(#F00 50%, #D00 75%, #900)}
 
 .annunciator {
     visibility:         hidden;
@@ -226,13 +234,7 @@ BUTTON.silverBorder {
     line-height:        100%}
 .annunciatorLit {
     visibility:         visible}
-.brushedStainless {
-    background-color: #a2a2a2;
-    background: linear-gradient(-45deg, #a2a2a2 0%, #e2e2e2 49%, #a2a2a2 100%)}
 
-
-.active {
-    color:              #F93}           /* neon orange */
 .bold {
     font-weight:        bold}
 .center {
@@ -245,3 +247,6 @@ BUTTON.silverBorder {
 .number {
     font-family:        DejaVuSansMonoBookWeb, monospace;
     text-align:         right}
+.brushedStainless {
+    background-color: #a2a2a2;
+    background: linear-gradient(-45deg, #a2a2a2 0%, #e2e2e2 49%, #a2a2a2 100%)}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>retro-lgp21 Emulator System Configuration</title>
+<!--
+/***********************************************************************
+* retro-lgp21/webUI SystemConfig.html
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 Emulator System Configuration page.
+*
+* Implements the system configuration user interface for the LGP-21 emulator.
+*
+************************************************************************
+* 2026-03-28  P.Kimpel
+*   Original version, from retro-1620 webUI/SystemConfig.html.
+***********************************************************************/
+-->
+<meta name="Author" content="Paul Kimpel">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link id=defaultStyleSheet rel=stylesheet type="text/css" href="Common.css">
+<link id=configStyleSheet rel=stylesheet type="text/css" href="SystemConfig.css">
+
+</head>
+
+<body id=configBody class=configBody>
+
+<div id=configDiv class=devicePanel>
+    <div id=PageHeading>
+        <span id=SysConfigHeading>General Precision LGP-21 &ndash; System Configuration</span>
+        <div id=RetroLGP21Logo>
+            <img id=RetroLogoImage src="./resources/retro-lgp21-Logo.png" alt="retro-lgp21 logo">
+        </div>
+    </div>
+    <hr>
+
+    <div id=MessageArea></div>
+    <button id=DefaultsBtn class="redButton"
+            title="Set configuration to original defaults">DEFAULTS</button>
+    <button id=CancelBtn class="redButton">CANCEL</button>
+    <button id=SaveBtn class="greenButton">SAVE</button>
+
+
+    <div class=heading>System Properties:</div>
+    <div class=details>
+        <input id=SystemPersistentWin  type=checkbox value=1>
+               <label for=SystemPersistentWin>Persistent Window Positions</label><br>
+        <input id=SystemMultiScreen  type=checkbox value=1 DISABLED>
+               <label for=SystemMultiScreen>Use Multi-Screen Positioning</label><br>
+    </div>
+
+
+    <div class=heading>Model B Numeric Typewriter:</div>
+    <div class=details>
+        Margin Left=<input id=MarginLeft class=rj type=text size=3 maxlength=3>,
+        Columns=<input id=Columns class=rj type=text size=3 maxlength=3><br>
+        Tab Stops: <input id=TabStops type=text size=80 maxlength=255>
+    </div>
+
+    <div class=heading>&nbsp;</div>
+</div>
+
+</body>
+</html>

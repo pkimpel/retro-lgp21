@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>retro-lgp21 Emulator</title>
+<!--
+/***********************************************************************
+* retro-lgp21/webUI LGP21.html
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 emulator home page.
+************************************************************************
+* 2026-03-17  P.Kimpel
+*   Original version, from retro-g15 G15.html.
+***********************************************************************/
+-->
+<meta name="Author" content="Paul Kimpel">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link id=defaultStyleSheet rel=stylesheet type="text/css" href="Common.css">
+<link id=homeStyleSheet rel=stylesheet type="text/css" href="LGP21.css">
+
+<script type=module src="./LGP21.js"></script>
+
+</head>
+
+<body>
+<div id=VersionDiv>
+    <img id=RetroLGP21Logo src="./resources/retro-LGP21-Logo.png" alt="retro-LGP21 Logo">
+    <div id=EmulatorVersion>?.??</div>
+</div>
+<h1>General Precision LGP-21 Emulator</h1>
+<hr>
+<table id=InfoTable>
+<tr>
+    <td><a href="https://github.com/pkimpel/retro-lgp21/" target="_blank">
+        Open-Source Project</a>
+    <td id=StatusMsg>
+    <td class=rj><a href="http://retro-emulation.blogspot.com/" target="_blank">Project Blog</a>
+<tr>
+    <td><a href="https://github.com/pkimpel/retro-lgp21/wiki/" target="_blank">
+        Project Wiki</a>
+    <td>&nbsp;
+    <td>&nbsp;
+</table>
+
+<div id=CenteredBody>
+    <img id=LGP21Image src="./resources/LGP21-system.jpg"
+         title="General Precision LGP-21 Computer System"
+         alt="General Precision LGP-21 Computer System">
+    <br>
+    <button id=StartUpBtn DISABLED title="Click to start the emulator">
+        Start the Emulator
+    </button>
+    &nbsp;&nbsp;&nbsp;
+    <button id=ConfigureBtn DISABLED title="Click to configure the system">
+        Configure System
+    </button>
+
+    <div id=ConfigMsg>&nbsp;</div>
+
+    <div id=PageFooter>
+        <i>(Caution: Closing this window, minimizing it, or placing the page on a non-active tab may cause the emulator to run very slowly)</i>
+    </div>
+</div>
+
+<audio id=SystemBell preload=auto
+       src="./resources/bell.mp3" type="audio/mpeg"></audio>
+
+</body>
+</html>

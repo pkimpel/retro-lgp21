@@ -105,57 +105,42 @@ BODY {
     background-color:   var(--darkGrey);
     border:             1px solid #999;
     box-shadow:         inset 8px 8px 8px #333}
-#BS4Caption,
-#BS4CaptionTL,
-#BS4CaptionBL,
-#BS4Switch {
+
+.bs4Switch {
     left:               16%;
-    top:                30%}
-#BS8Caption,
-#BS8CaptionTL,
-#BS8CaptionBL,
-#BS8Switch {
+    top:                26%}
+.bs8Switch {
     left:               32%;
-    top:                30%}
-#BS16Caption,
-#BS16CaptionTL,
-#BS16CaptionBL,
-#BS16Switch {
+    top:                26%}
+.bs16Switch {
     left:               16%;
     top:                70%}
-#BS32Caption,
-#BS32CaptionTL,
-#BS32CaptionBL,
-#BS32Switch {
+.bs32Switch {
     left:               32%;
     top:                70%}
-#TCCaption,
-#TCCaptionTL,
-#TCCaptionBL,
-#TCSwitch {
+.tcSwitch {
     left:               48%;
     top:                50%}
-#ModeCaption,
-#ModeCaptionTL,
-#ModeCaptionML,
-#ModeCaptionBL,
-#ModeSwitch {
+.modeSwitch {
     left:               67%;
     top:                50%}
-#ModeCaption {
-    transform:          translate(-50%, 24px)}
-#ModeCaptionTL {
+
+DIV.modeCaptionMain {
+    transform:          translate(-50%, 30px)}
+DIV.modeCaptionTL {
     transform:          translate(-60px, -32px)}
-#ModeCaptionML {
+DIV.modeCaptionML {
     transform:          translate(-60px, -50%)}
-#ModeCaptionBL {
+DIV.modeCaptionBL {
     transform:          translate(-60px, 14px)}
+
 #ExecuteBtnCaption,
 #ExecuteBtn {
     left:               85%;
     top:                28%;
     transform:          translate(-50%, -50%)}
 #ExecuteBtnCaption {
+    position:           absolute;
     transform:          translate(calc(-100% - 20px), -50%)}
 #FillClearBtnCaption,
 #FillClearBtn {
@@ -163,6 +148,7 @@ BODY {
     top:                72%;
     transform:          translate(-50%, -50%)}
 #FillClearBtnCaption {
+    position:           absolute;
     transform:          translate(calc(-100% - 20px), -50%)}
 
 #WhiteFrame {
@@ -172,6 +158,14 @@ BODY {
     width:              100%;
     background-color:   var(--offWhite);
     box-shadow:         inset 4px 4px 4px #333}
+#EmulatorVersion {
+    position:           absolute;
+    right:              8px;
+    bottom:             4px;
+    font-size:          10px;
+    font-weight:        bold;
+    color:              var(--gpBlue)}
+
 #ButtonFrame {
     position:           absolute;
     top:                38%;
@@ -183,11 +177,40 @@ BODY {
     background-color:   var(--offWhite);
     border:             1px solid #CCC;
     box-shadow:         1px 1px 1px #999}
-#PowerBtn {
+
+.powerUp {
+    animation-name:     powerUpAnimation;
+    animation-duration: 4s;
+    animation-timing-function: linear;
+    animation-direction:normal;
+    animation-fill-mode:forwards}
+
+.powerDown {
+    animation-name:     powerUpAnimation;
+    animation-duration: 2s;
+    animation-timing-function: linear;
+    animation-direction:reverse;
+    animation-fill-mode:forwards}
+
+@keyframes powerUpAnimation {
+    from {
+        opacity:        0}
+    to {
+        opacity:        1}
+    }
+
+#PowerBtn,
+#PowerBtnFX {
     position:           absolute;
     left:               16%;
     top:                50%;
     transform:          translate(-50%, -50%)}
+#PowerBtnFX {                   /* used to animate the power up/down sequence */
+    display:            none;
+    opacity:            0;
+    z-index:            1;
+    background-image:   radial-gradient(#FEC 33%, #EDA 75%, #999)}
+
 #IOBtn {
     position:           absolute;
     left:               39%;
@@ -215,51 +238,3 @@ BODY {
     bottom:             22%;
     width:              70%;
     transform:          translate(-50%, 50%)}
-
-
-.squareButton {
-    position:           absolute;
-    height:             44px;
-    width:              44px;
-    background-color:   #CCC;
-    color:              black;
-    font-family:        DejaVuSansWeb;
-    font-weight:        bold;
-    font-size:          8px;
-    padding:            2px;
-    border-radius:      4px;
-    border:             3px solid black}
-.redButton {
-    background-color:   #FCC;
-    color:              white}
-
-
-.powerUp {
-    animation-name:     powerUpAnimation;
-    animation-duration: 4s;
-    animation-timing-function: ease-in;
-    animation-direction:normal;
-    animation-fill-mode:forwards}
-
-.powerDown {
-    animation-name:     powerUpAnimation;
-    animation-duration: 2s;
-    animation-timing-function: ease-in;
-    animation-direction:reverse;
-    animation-fill-mode:forwards}
-
-@keyframes powerUpAnimation {
-    from {
-        opacity:        0}
-    to {
-        opacity:        1}
-    }
-
-
-
-#VersionDiv {
-    position:           absolute;
-    right:              8px;
-    bottom:             4px;
-    font-size:          10px;
-    color:              black}

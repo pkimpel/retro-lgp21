@@ -24,8 +24,8 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="2.1694726"
-     inkscape:cx="396.4097"
-     inkscape:cy="376.81969"
+     inkscape:cx="396.64018"
+     inkscape:cy="376.35875"
      inkscape:window-width="1920"
      inkscape:window-height="1057"
      inkscape:window-x="-8"
@@ -52,8 +52,10 @@
          style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:semi-condensed;font-size:6.35px;font-family:'Lucida Sans Typewriter';-inkscape-font-specification:'Lucida Sans Typewriter, Semi-Bold Semi-Condensed';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;stroke-width:0.264583"
          x="65.195122"
          y="76.578392"><tspan
-   style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:semi-expanded;font-size:6.35px;font-family:Magneto;-inkscape-font-specification:'Magneto, Bold Semi-Expanded';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
-   id="tspan4">retro</tspan>LGP-21</tspan></text>
+           style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:semi-expanded;font-size:6.35px;font-family:Magneto;-inkscape-font-specification:'Magneto, Bold Semi-Expanded';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
+           id="tspan4">retro</tspan><tspan
+           style="font-style:normal;font-variant:normal;font-weight:600;font-stretch:semi-condensed;font-size:5.64444px;font-family:'Lucida Sans Typewriter';-inkscape-font-specification:'Lucida Sans Typewriter, Semi-Bold Semi-Condensed';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal"
+           id="tspan2">LGP-21</tspan></tspan></text>
     <text
        xml:space="preserve"
        style="font-size:10.5833px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;stroke-width:0.264583"
@@ -62,6 +64,6 @@
        id="text3"><tspan
          sodipodi:role="line"
          id="tspan3"
-         style="stroke-width:0.264583"></tspan></text>
+         style="stroke-width:0.264583" /></text>
   </g>
 </svg>
