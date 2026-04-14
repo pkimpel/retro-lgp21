@@ -1,0 +1,348 @@
+/***********************************************************************
+* retro-lgp21/webUI Flexowriter.css
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 emulator Flexowriter style sheet.
+************************************************************************
+* 2026-04-06  P.Kimpel
+*   Original version, from retro-g15 G15.css.
+***********************************************************************/
+
+BODY {
+    position:           relative;
+    background-color:   #DDDDDF}
+
+BUTTON.flexoLeverUp {
+    position:           absolute;
+    height:             40px;
+    width:              52px;
+    font-weight:        bold;
+    font-size:          10px;
+    color:              var(--offWhite);
+    cursor:             pointer;
+    background-image:   linear-gradient(#004 15%, #5E6190 65%, #004 90%); /*(#36343F 20%, #5E6170 50%, #36343F 80%)*/
+    border:             none;
+    border-radius:      4px;
+    box-shadow:         6px 8px 8px #666}
+BUTTON.flexoLeverDown {
+    background-image:   linear-gradient(#003 50%, #5E6170 90%, #003);
+    transform:          translate(0, 8px);
+    box-shadow:         4px 6px 6px #666}                                 /* (#201E29 40%, #5E6170) */
+
+/* Flexowriter Levers Frame */
+
+#LeverFrame {
+    position:           absolute;
+    top:                0;
+    height:             64px;
+    left:               50%;
+    width:              100%;
+    min-width:          470px;
+    max-width:          600px;
+    transform:          translate(-50%, 0)}
+#ManualInputLamp {
+    position:           absolute;
+    left:               50%;
+    top:                20px;
+    height:             fit-content;
+    width:              fit-content;
+    transform:          translate(-50%, -50%);
+    z-index:            -1;
+    text-align:         center;
+    line-height:        1.2;
+    font-size:          10px;
+    font-weight:        bold;
+    padding:            8px;
+    background-color:   #DDC;
+    border:             1px solid #CCC;
+    border-radius:      4px;
+    box-shadow:         3px 3px 3px #999}
+#ManualInputLamp.lit {
+    background-image:   radial-gradient(circle, #FE9 33%, #EDA 75%, #CCC)}
+#CondStopLever {
+    top:                0;
+    left:               4px}
+#StartReadLever {
+    top:                0;
+    left:               58px}
+#StopReadLever {
+    top:                0;
+    left:               112px}
+#PunchOnLever {
+    top:                0;
+    left:               166px}
+#TapeFeedLever {
+    top:                0;
+    right:              166px}
+#CodeDeleteLever {
+    top:                0;
+    right:              112px}
+#ManInputLever {
+    top:                0;
+    right:              58px}
+#StartCompLever {
+    top:                0;
+    right:              4px}
+
+#CaseIndicator {
+    position:           absolute;
+    left:               112px;
+    top:                38px;
+    width:              fit-content;
+    height:             16px;
+    transform:          translate(-50%, 0);
+    border:             none}
+#CaseIndicator LABEL {
+    font-weight:        bold}
+
+#ColorIndicator {
+    position:           absolute;
+    right:              112px;
+    top:                38px;
+    width:              fit-content;
+    height:             16px;
+    transform:          translate(50%, 0);
+    border:             none}
+#ColorIndicator LABEL {
+    font-weight:        bold}
+#ColorIndicator LABEL.red {
+    color:              red}
+
+/* Paper Tape Frame */
+
+#PaperTapeFrame {
+    position:           absolute;
+    top:                64px;
+    left:               4px;
+    right:              6px;
+    height:             24px;
+    padding:            8px;
+    background-color:   #CCC;
+    border-radius:      6px;
+    border:             1px solid #999}
+
+#PaperTapeFrame BUTTON {
+    position:           relative;
+    top:                50%;
+    width:              auto;
+    height:             24px;
+    transform:          translate(0, -50%);
+    color:              white;
+    background-color:   #666;
+    padding-left:       4px;
+    padding-right:      4px;
+    font-size:          12px;
+    line-height:        100%;
+    border:             2px solid #CCC;
+    box-shadow:         2px 2px 2px #999}
+
+/* Paper Tape Reader */
+#PaperTapeReader {
+    position:           absolute;
+    top:                0;
+    left:               4px;
+    width:              calc(50% - 16px);
+    height:             100%}
+#PRCaption {
+    position:           absolute;
+    top:                0;
+    left:               50%;
+    transform:          translate(-50%, 0);
+    font-size:          10px;
+    font-weight:        bold}
+#PRMenuIcon {
+    position:           absolute;
+    top:                calc(50% + 6px);
+    left:               0;
+    transform:          translate(0, -50%)}
+#PRTapeSupplyBar {
+    position:           absolute;
+    top:                calc(50% + 6px);
+    right:              0;
+    width:              calc(100% - 32px);
+    height:             16px;
+    transform:          translate(0, -50%)}
+
+#PRControlsMenu {
+    position:           absolute;
+    display:            none;
+    top:                48px;
+    left:               0;
+    width:              360px;
+    height:             64px;
+    z-index:            12;
+    padding:            0;
+    background-color:   #FFE;
+    border:             1px solid #666;
+    border-radius:      6px;
+    box-shadow:         3px 3px 3px #666}
+#PRFormatSelect {
+    position:           absolute;
+    top:                16px;
+    left:               4px;
+    transform:          translate(0, -50%);
+    font-weight:        bold;
+    color:              white;
+    background-color:   #666;
+    border:             2px solid #CCC;
+    border-radius:      4px;
+    box-shadow:         2px 2px 2px #999}
+#PRFileSelector {
+    position:           absolute;
+    bottom:             16px;
+    left:               4px;
+    width:              calc(100% - 8px);
+    transform:          translate(0, 50%);
+    color:              black}
+#PRUnloadBtn {
+    position:           absolute;
+    right:              64px;
+    top:                16px;
+    transform:          translate(0, -50%)}
+#PRMenuCloseBtn {
+    position:           absolute;
+    right:              4px;
+    top:                16px;
+    transform:          translate(0, -50%)}
+
+/* Paper Tape Punch */
+#PaperTapePunch {
+    position:           absolute;
+    top:                0;
+    right:              4px;
+    width:              calc(50% - 16px);
+    height:             100%}
+#PTCaption {
+    position:           absolute;
+    top:                0;
+    left:               50%;
+    transform:          translate(-50%, 0);
+    font-size:          10px;
+    font-weight:        bold}
+#PTView {
+    position:           absolute;
+    top:                calc(50% + 6px);
+    left:               0;
+    width:              calc(100% - 34px);
+    transform:          translate(0, -50%);
+    color:              black;
+    background-color:   white;
+    text-align:         right;
+    border:             1px solid gray}
+#PTView .red {
+    color:              #F00}
+#PTMenuIcon {
+    position:           absolute;
+    top:                calc(50% + 6px);
+    right:              0;
+    transform:          translate(0, -50%)}
+
+#PTControlsMenu {
+    position:           absolute;
+    display:            none;
+    top:                56px;
+    right:              0;
+    width:              340px;
+    height:             48px;
+    z-index:            11;
+    padding-left:       8px;
+    padding-right:      8px;
+    background-color:   #FFE;
+    border:             2px solid #666;
+    border-radius:      6px;
+    box-shadow:         3px 3px 3px #666}
+/*********************************************
+#PTControlsMenu BUTTON {
+    position:           relative;
+    top:                50%;
+    transform:          translate(0, -50%)}
+*********************************************/
+
+/* Typewriter output frame */
+
+#TypewriterPaperFrame {
+    position:           absolute;
+    top:                112px;
+    bottom:             4px;
+    left:               0;
+    width:              100%;
+    min-width:          300px;
+    max-width:          100%}
+#TypewriterPaper {
+    position:           absolute;
+    top:                0;
+    left:               0;
+    height:             100%;
+    width:              calc(100% - 2px);
+    min-width:          300px;
+    z-index:            -1;
+    white-space:        pre;
+    overflow:           auto;
+    border:             1px solid gray}
+
+#TypewriterMenuIcon {
+    position:           absolute;
+    top:                4px;
+    right:              20px;
+    z-index:            10}
+#TypewriterMenu {
+    position:           absolute;
+    display:            none;
+    top:                8px;
+    right:              4px;
+    width:              auto;
+    height:             40px;
+    z-index:            12;
+    background-color:   #FFE;
+    padding-left:       8px;
+    padding-right:      8px;
+    border:             2px solid #666;
+    border-radius:      6px;
+    box-shadow:         3px 3px 3px #999}
+#TypewriterMenu BUTTON {
+    position:           relative;
+    top:                50%;
+    width:              auto;
+    height:             24px;
+    transform:          translate(0, -50%);
+    color:              white;
+    background-color:   #666;
+    padding-left:       4px;
+    padding-right:      4px;
+    font-size:          12px;
+    line-height:        100%;
+    border:             2px solid #CCC;
+    box-shadow:         2px 2px 2px #999}
+
+#TypeOMaticPanel {
+    position:           absolute;
+    display:            none;
+    top:                32px;
+    right:              4px;
+    width:              fit-content;
+    height:             fit-content;
+    padding:            4px;
+    z-index:            10;
+    opacity:            0.75;
+    text-align:         center;
+    white-space:        nowrap;
+    font-family:        DejaVuSansWeb;
+    font-weight:        bold;
+    color:              black;
+    background-color:   #FFE;
+    border:             2px solid #080;
+    box-shadow:         3px 3px 3px #999}
+#TypeOMaticMeterBar {
+    width:              24ch;
+    margin-top:         4px;
+    margin-bottom:      4px}
+#TypeOMaticClearBtn, #TypeOMaticPauseBtn {
+    height:             24px;
+    width:              80px;
+    border-color:       #666}
+#TypeOMaticPanel .paused {
+    color:              white;
+    background-color:   red}

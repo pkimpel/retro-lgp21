@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>retro-lgp21 Flexowriter</title>
+<!--
+/***********************************************************************
+* retro-lgp21/webUI Flexowriter.html
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 emulator Flexowriter device page.
+************************************************************************
+* 2026-04-06  P.Kimpel
+*   Original version, from Bendix-G15 G15.html.
+***********************************************************************/
+-->
+<meta name="Author" content="Paul Kimpel">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link id=defaultStyleSheet rel=stylesheet type="text/css" href="Common.css">
+<link id=homeStyleSheet rel=stylesheet type="text/css" href="Flexowriter.css">
+
+<script type=module src="./Flexowriter.js"></script>
+
+</head>
+
+<body>
+    <div id=FlexowriterPanel tabindex=-1>         <!-- tabindex allows the div to receive focus -->
+
+        <div id=LeverFrame>
+            <div id=ManualInputLamp><span>MANUAL<br>INPUT</span></div>
+
+            <fieldset id=CaseIndicator title="Click to toggle the Upper/Lower-Case state">
+                <label id=LCIndicator for=LCBtn>LC</label>
+                <input id=LCBtn name=CaseButtons type=radio value=0 CHECKED>
+                <input id=UCBtn name=CaseButtons type=radio value=1>
+                <label id=UCIndicator for=UCBtn>UC</label>
+            </fieldset>
+
+            <fieldset id=ColorIndicator title="Click to toggle the printing color">
+                <label id=BlackIndicator for=BlackBtn>BLACK</label>
+                <input id=BlackBtn name=ColorButtons type=radio value=0 CHECKED>
+                <input id=RedBtn name=ColorButtons type=radio value=1>
+                <label id=RedIndicator for=RedBtn class=red>RED</label>
+            </fieldset>
+        </div>
+
+        <div id=PaperTapeFrame>
+            <div id=PaperTapeReader>
+                <div id=PRCaption>READER</div>
+                <img id=PRMenuIcon src="./resources/icons8-menu-24.png" alt="Paper-Tape Reader menu icon"
+                     title="Click to open the paper-tape reader menu">
+                <meter id=PRTapeSupplyBar min=0 max=100 value=0
+                       title="Tape Buffer Remaining"></meter>
+
+                <div id=PRControlsMenu>
+                    <select id=PRFormatSelect>
+                        <option value=Auto selected>Auto
+                        <option value=.ptx         >.ptx
+                        <option value=.ptp         >.ptp
+                    </select>
+                    <input id=PRFileSelector type=file size=40 multiple>
+                    <button id=PRUnloadBtn>UNLOAD</button>
+                    <button id=PRMenuCloseBtn>CLOSE</button>
+                </div>
+            </div>
+
+            <div id=PaperTapePunch>
+                <div id=PTCaption>PUNCH</div>
+                <input id=PTView type=text READONLY>
+                <img id=PTMenuIcon src="./resources/icons8-menu-24.png" alt="Paper-Tape Punch menu icon"
+                     title="Click to open the paper-tape punch menu">
+                <div id=PTControlsMenu>
+                    <button id=PTSavePTXBtn type=button
+                            title="Save as .ptx format (text)"
+                            >Save PTX</button>&nbsp;
+                    <button id=PTSavePTPBtn type=button
+                            title="Save as .ptp format (binary)"
+                            >Save PTP</button>&nbsp;
+                    <button id=PTExtractBtn type=button
+                            title="Extract tape image as text to a new window"
+                            >Extract</button>&nbsp;
+                    <button id=PTClearBtn type=button>Clear</button>&nbsp;
+                    <button id=PTCloseBtn type=button>Close</button>
+                </div>
+            </div>
+        </div>
+
+        <div id=TypewriterPaperFrame>
+            <iframe id=TypewriterPaper src="./FramePaper.html"></iframe>
+            <img id=TypewriterMenuIcon src="./resources/icons8-menu-24.png"
+                 alt="Menu icon" title="Click to open menu">
+
+            <div id=TypewriterMenu>
+                <button id=TypewriterExtractBtn type=button>Extract</button>&nbsp;
+                <button id=TypewriterPrintBtn type=button>Print</button>&nbsp;
+                <button id=TypewriterSaveBtn type=button>Save</button>&nbsp;
+                <button id=TypewriterClearBtn type=button>Clear</button>&nbsp;
+                <button id=TypewriterCloseBtn type=button>Close</button>
+            </div>
+
+            <div id=TypeOMaticPanel>
+                Type-O-Matic Buffer<br>
+                <meter id=TypeOMaticMeterBar min=0 max=100 value=0
+                       title="Paste Buffer Remaining"></meter><br>
+                <div class=center>
+                    <button id=TypeOMaticPauseBtn type=button>Pause</button>&nbsp;&nbsp;&nbsp;
+                    <button id=TypeOMaticClearBtn type=button>Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

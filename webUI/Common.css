@@ -35,10 +35,18 @@
     font-style: normal;
 }
 
+@font-face {
+    font-family: "Pica10BTRoman";
+    src: url("./resources/Pica10BTRoman.woff") format("woff"),
+         url("./resources/Pica10BTRoman.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
 HTML {
     height:             100%;
     --gpBlue:           #699BCD;
-    --turquoise:        #55DDEE;
+    --turquoise:        #44CCDD;                /* was #55DDEE, officially it's #30D5C8 */
     --grecianGrey:      #dacfbe;
     --darkGrey:         #666666;
     --offWhite:         #F9F9F9}
@@ -74,14 +82,6 @@ H1 {
     font-size:          14pt;
     font-weight:        bold}
 
-PRE.paper,
-IFRAME.paper {
-    font-family:        DejaVuSansMonoBookWeb, monospace;
-    font-size:          12px;
-    line-height:        120%;
-    color:              black;
-    background-color:   white}
-
 PRE {
     font-family:        DejaVuSansMonoBookWeb, monospace}
 PRE.paper {
@@ -94,12 +94,16 @@ INPUT[type=text] {
     font-size:          8pt}
 
 DIV.paper {
-    font-family:        DejaVuSansMonoBookWeb, monospace;
+    font-family:        Pica10BTRoman, monospace;
     white-space:        pre;
     margin-top:         0;
     margin-bottom:      0;
-    font-size:          12px;
-    line-height:        12pt}
+    font-size:          11pt;
+    line-height:        12pt;
+    overflow:           auto}
+DIV.paper .printRed {
+    color:              red}
+
 DIV.topOfForm {
     page-break-before:  always;
     margin-top:         1px;
@@ -209,7 +213,7 @@ BUTTON.squareButton {
     position:           absolute;
     height:             48px;
     width:              48px;
-    background-color:   #CCC;
+    background-image:   radial-gradient(#CCC 33%, #DDC);
     color:              black;
     font-family:        DejaVuSansWeb;
     font-weight:        bold;
@@ -219,7 +223,7 @@ BUTTON.squareButton {
     border:             4px solid black;
     box-shadow:         1px 1px 3px #999}
 BUTTON.whiteButtonLit {
-    background-image:   radial-gradient(#FEC 33%, #EDA 75%, #999)}
+    background-image:   radial-gradient(#FE9 33%, #EDA 75%, #DDC)}
 BUTTON.redButton {
     background-image:   radial-gradient(#900, #600);
     color:              white}
@@ -250,3 +254,5 @@ BUTTON.redButtonLit {
 .brushedStainless {
     background-color: #a2a2a2;
     background: linear-gradient(-45deg, #a2a2a2 0%, #e2e2e2 49%, #a2a2a2 100%)}
+.red {
+    color:              red}

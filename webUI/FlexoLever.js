@@ -56,14 +56,10 @@ class FlexoLever {
 
 
         if (!this.momentary) {
-            this.addEventListener("click", this.boundFlip, false);
+            this.element.addEventListener("click", this.boundFlip, false);
         } else {
-            this.addEventListener("mousedown", (ev) => {
-                this.element.classList.add(FlexoLever.onClass);
-            }, false);
-            this.addEventListener("mouseup", (ev) => {
-                this.element.classList.remove(FlexoLever.onClass);
-            }, false);
+            this.element.addEventListener("mousedown", this.boundFlip, false);
+            this.element.addEventListener("mouseup", this.boundFlip, false);
         }
     }
 
@@ -78,7 +74,7 @@ class FlexoLever {
     removeEventListener(eventName, handler, useCapture) {
         /* Removes an event handler */
 
-        this.element.addEventListener(eventName, handler, useCapture);
+        this.element.removeEventListener(eventName, handler, useCapture);
     }
 
     /**************************************/
@@ -97,10 +93,12 @@ class FlexoLever {
     }
 
     /**************************************/
-    flip() {
+    flip(ev) {
         /* Complements the visible state of the switch */
 
-        this.set(1 - this.state);
+        this.set(this.state ? 0 : 1);
+        ev?.preventDefault();
+        ev?.stopPropagation();
     }
 
     /**************************************/
@@ -114,6 +112,11 @@ class FlexoLever {
     shutDown() {
         /* Unwires the control's events */
 
-
+        if (!this.momentary) {
+            this.element.removeEventListener("click", this.boundFlip, false);
+        } else {
+            this.element.removeEventListener("mousedown", this.boundFlip, false);
+            this.element.removeEventListener("mouseup", this.boundFlip, false);
+        }
     }
 } // class FlexoLever
