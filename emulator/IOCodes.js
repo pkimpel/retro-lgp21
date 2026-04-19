@@ -21,6 +21,7 @@ export const ioBackspace =      0b001010;
 export const ioTab =            0b001100;
 export const ioCondStop =       0b010000;
 export const ioSpace =          0b100001;
+export const ioDelete =         0b111111;
 
 // Internal control codes.        123456
 export const icTapeFeed =       0b000000;
@@ -32,6 +33,7 @@ export const icBackspace =      0b010100;
 export const icTab =            0b011000;
 export const icCondStop =       0b100000;
 export const icSpace =          0b000011;
+export const icDelete =         0b111111;
 
 // Special glyphs.
 export const greekDelta =       "\u0394";       // Greek Delta (Δ)  keyed as "&"
@@ -52,4 +54,4 @@ export const ioASCIIToTapeCode = [
 
 // Translate I/O tape code values to ASCII.
 export const ioTapeCodeToASCII =
-        "_0}1{2^3<4!5|6\"7'8$9%F&G(J)K*Q:WZ B-Y+R;I/D.N,MVPOEXU=T>H?C@A`S~";
+        "_0}1{2^3<4!5|6\"7'8$9%f&g(j)k*q:wz b-y+r;i/d.n,mvpoexu=t>h?c@a`s~";

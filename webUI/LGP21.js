@@ -1,5 +1,5 @@
 /***********************************************************************
-* retro-lpg21/webUI LGP21.js
+* retro-lgp21/webUI LGP21.js
 ************************************************************************
 * Copyright (c) 2026, Paul Kimpel.
 * Licensed under the MIT License, see
@@ -16,7 +16,7 @@ import {Processor} from "../emulator/Processor.js";
 
 import {ControlPanel} from "./ControlPanel.js";
 import {SystemConfig} from "./SystemConfig.js";
-//import {Typewriter} from "./Typewriter.js";
+import {Flexowriter} from "./Flexowriter.js";
 
 
 const globalLoad = (ev) => {
@@ -109,7 +109,7 @@ const globalLoad = (ev) => {
         //    context.devices.paperReader = new PaperTapeReader(context);
         //}
 
-        //context.devices.typewriter = new Typewriter(context);
+        context.devices.flexowriter = new Flexowriter(context);
         context.controlPanel = new ControlPanel(context);
     }
 

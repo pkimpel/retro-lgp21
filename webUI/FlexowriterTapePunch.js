@@ -19,12 +19,13 @@ export {FlexowriterTapePunch};
 
 import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
+import {Flexowriter} from "./Flexowriter.js";
 import {openPopup} from "./PopupUtil.js";
+
 
 class FlexowriterTapePunch {
 
     static bufferLimit = 0x3FFFF;       // maximum output that will be buffered (about 7 hours worth)
-    static viewMax = 40;                // characters retained in the tape view
 
 
     constructor(context, flexowriter) {
@@ -39,25 +40,31 @@ class FlexowriterTapePunch {
         this.processor = context.processor;
         this.flexowriter = flexowriter;
         this.window = flexowriter.window;
-        this.doc = this.flexowriter.document;
+        this.doc = this.flexowriter.doc;
         this.tapeView = $$("PTView");
         this.tapeViewLength = 50;       // chars that will fit in the TapeView box
-        this.boundMenuClick = this.menuClick.bind(this);
-        this.boundResizeWindow = this.resizeWindow.bind(this);
+        this.feeding = false;           // true when punching Tape Feed or Delete codes
         this.buffer = new Uint8Array(FlexowriterTapePunch.bufferLimit+1);
+
+        this.boundMenuClick = this.menuClick.bind(this);
+        this.boundFeedTape = this.feedTape.bind(this);
+        this.boundDeleteCode = this.deleteCode.bind(this);
+        this.boundResizeWindow = this.resizeWindow.bind(this);
 
         this.clear();
 
         this.window.addEventListener("resize", this.boundResizeWindow);
         $$("PTMenuIcon").addEventListener("click", this.boundMenuClick);
+        this.flexowriter.tapeFeedLever.addEventListener("mousedown", this.boundFeedTape);
+        this.flexowriter.codeDeleteLever.addEventListener("mousedown", this.boundDeleteCode);
 
-        // Do offsetting window resizes after things calm down a bit to force
+        // Do offsetting window resizes after loading calms down a bit to force
         // recalculation of the number of characters the TapeView box can display.
         this.tapeView.value = "_";
         setTimeout(() => {
-            this.window.resizeBy(-8, 0);
+            this.window.resizeBy(-4, 0);
             setTimeout(() => {
-                this.window.resizeBy(8, 0);
+                this.window.resizeBy(4, 0);
                 this.tapeView.value = " ";
             }, 500);
         }, 500);
@@ -100,7 +107,7 @@ class FlexowriterTapePunch {
         const textSpecs = dc.measureText(sample);
         const sampleWidth = textSpecs.width;
         this.tapeViewLength = Math.floor(sample.length/sampleWidth*this.tapeView.clientWidth);
-        //console.debug("PTPunch Resize: font specs %s, sample length %i / width %f * TV width %i = TVLength %i",
+        //console.debug("PT Resize: font specs %s, sample length %i / width %f * TV width %i = TVLength %i",
         //          fontSpecs, sample.length, sampleWidth, this.tapeView.clientWidth, this.tapeViewLength);
         if (this.tapeView.value.length > this.tapeViewLength) {
             this.tapeView.value = this.tapeView.value.slice(-this.tapeViewLength);
@@ -114,6 +121,14 @@ class FlexowriterTapePunch {
         this.buffer.fill(0);            // punch output buffer
         this.bufLength = 0;             // current output buffer length (characters)
         this.tapeView.value = "";
+        this.feeding = false;
+    }
+
+    /**************************************/
+    cancel() {
+        /* Cancels the I/O currently in process */
+
+        this.canceled = true;           // currently affects nothing
     }
 
     /**************************************/
@@ -177,14 +192,9 @@ class FlexowriterTapePunch {
 
             for (let x=0; x<len; ++x) {
                 const code = buf[x];
-                text += FlexowriterTapePunch.tapeCodes[code];
-                switch (code) {
-                case IOCodes.IOCodeReload:
+                text += IOCodes.ioTapeCodeToASCII[code];
+                if (code == IOCodes.ioCarriageReturn) {
                     text += "\n";
-                    break;
-                case IOCodes.IOCodeStop:
-                    text += "\n\n";
-                    break;
                 }
             }
 
@@ -205,14 +215,9 @@ class FlexowriterTapePunch {
 
         for (let x=0; x<len; ++x) {
             const code = buf[x];
-            text += FlexowriterTapePunch.tapeCodes[code];
-            switch (code) {
-            case IOCodes.IOCodeReload:
+            text += IOCodes.ioTapeCodeToASCII[code];
+            if (code == IOCodes.ioCarriageReturn) {
                 text += "\n";
-                break;
-            case IOCodes.IOCodeStop:
-                text += "\n\n";
-                break;
             }
         }
 
@@ -266,7 +271,11 @@ class FlexowriterTapePunch {
 
         switch (ev.target.id) {
         case "PTMenuIcon":
-            this.menuOpen();
+            if (this.$$("PTControlsMenu").style.display == "block") {
+                this.menuClose();
+            } else {
+                this.menuOpen();
+            }
             break;
         case "PTSavePTXBtn":
             this.saveAsPTX();
@@ -280,17 +289,10 @@ class FlexowriterTapePunch {
         case "PTClearBtn":
             this.setPunchEmpty();
             //-no break -- clear always closes panel
-        case "PTCloseBtn":
+        case "PTMenuCloseBtn":
             this.menuClose();
             break;
         }
-    }
-
-    /**************************************/
-    cancel() {
-        /* Cancels the I/O currently in process */
-
-        this.canceled = true;           // currently affects nothing
     }
 
     /**************************************/
@@ -298,19 +300,81 @@ class FlexowriterTapePunch {
         /* Writes one tape code to the punch. The physical punch device
         operates at 10 characters/second, but the speed is controlled by the
         parent Flexowriter device. The parent device will also filter out
-        non-Flexowriter tape codes */
+        non-Flexowriter tape codes. Returns 0 if successful or -1 if the
+        code cannot be written (due to buffer full) */
         let char = IOCodes.ioTapeCodeToASCII[code];
+        let result = 0;
 
-        if (this.bufLength < FlexowriterTapePunch.bufferLimit) {
+        if (this.bufLength >= FlexowriterTapePunch.bufferLimit) {
+            result = -1;
+        } else {
             this.buffer[this.bufLength] = code;
             ++this.bufLength;
 
             // Update the tape view control
             let view = this.tapeView.value; // current tape view contents
-            if (view.length < FlexowriterTapePunch.viewMax) {
+            if (view.length < this.tapeViewLength) {
                 this.tapeView.value = view + char;
             } else {
-                this.tapeView.value = view.slice(1-FlexowriterTapePunch.viewMax) + char;
+                this.tapeView.value = view.slice(1-this.tapeViewLength) + char;
+            }
+        }
+
+        return result;
+    }
+
+    /**************************************/
+    feedTape() {
+        /* Event handler for the Tape Feed lever. Feeds one blank frame of
+        paper tape. If the lever is held down for more than a character cycle
+        time, continues feeding at the character cycle rate */
+        let cyclePeriod = Flexowriter.defaultCyclePeriod;
+
+        if (!this.flexowriter.codeDeleteLever.state) {
+            if (!this.flexowriter.punchOnLever.state) {
+                this.feeding = false;
+            } else {
+                this.write(IOCodes.ioTapeFeed);
+                if (!this.feeding) {
+                    this.feeding = true;
+                    cyclePeriod *= 2.5;     // longer initial delay to debounce the lever switch
+                }
+
+                setTimeout(() => {
+                   if (this.flexowriter.tapeFeedLever.state) {
+                       this.feedTape();
+                   } else {
+                       this.feeding = false;
+                   }
+                }, cyclePeriod);
+            }
+        }
+    }
+
+    /**************************************/
+    deleteCode() {
+        /* Event handler for the CodeDelete lever. Punches one rubout frame of
+        paper tape. If the lever is held down for more than a character cycle
+        time, continues punching at the character cycle rate */
+        let cyclePeriod = Flexowriter.defaultCyclePeriod;
+
+        if (!this.flexowriter.tapeFeedLever.state) {
+            if (!this.flexowriter.punchOnLever.state) {
+                this.feeding = false;
+            } else {
+                this.write(IOCodes.ioDelete);
+                if (!this.feeding) {
+                    this.feeding = true;
+                    cyclePeriod *= 2.5;     // longer initial delay to debounce the lever switch
+                }
+
+                setTimeout(() => {
+                   if (this.flexowriter.codeDeleteLever.state) {
+                       this.deleteCode();
+                   } else {
+                       this.feeding = false;
+                   }
+                }, cyclePeriod);
             }
         }
     }
@@ -322,5 +386,7 @@ class FlexowriterTapePunch {
         this.menuClose();
         this.window.removeEventListener("resize", this.boundResizeWindow);
         this.$$("PTMenuIcon").removeEventListener("click", this.boundMenuClick);
+        this.flexowriter.tapeFeedLever.removeEventListener("mousedown", this.boundFeedTape);
+        this.flexowriter.codeDeleteLever.removeEventListener("mousedown", this.boundDeleteCode);
     }
 } // class FlexowriterTapePunch

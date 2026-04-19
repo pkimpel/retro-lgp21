@@ -100,7 +100,7 @@ DIV.paper {
     margin-bottom:      0;
     font-size:          11pt;
     line-height:        12pt;
-    overflow:           auto}
+    overflow:           hidden}
 DIV.paper .printRed {
     color:              red}
 

@@ -1,5 +1,5 @@
 /***********************************************************************
-* retro-lgp31/webUI PopupUtil.js
+* retro-lgp21/webUI PopupUtil.js
 ************************************************************************
 * Copyright (c) 2026, Paul Kimpel.
 * Licensed under the MIT License, see

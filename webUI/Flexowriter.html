@@ -34,10 +34,10 @@
             <div id=ManualInputLamp><span>MANUAL<br>INPUT</span></div>
 
             <fieldset id=CaseIndicator title="Click to toggle the Upper/Lower-Case state">
-                <label id=LCIndicator for=LCBtn>LC</label>
+                <label id=LCIndicator for=LCBtn>lower</label>
                 <input id=LCBtn name=CaseButtons type=radio value=0 CHECKED>
                 <input id=UCBtn name=CaseButtons type=radio value=1>
-                <label id=UCIndicator for=UCBtn>UC</label>
+                <label id=UCIndicator for=UCBtn>UPPER</label>
             </fieldset>
 
             <fieldset id=ColorIndicator title="Click to toggle the printing color">
@@ -59,8 +59,8 @@
                 <div id=PRControlsMenu>
                     <select id=PRFormatSelect>
                         <option value=Auto selected>Auto
-                        <option value=.ptx         >.ptx
                         <option value=.ptp         >.ptp
+                        <option value=.ptx         >.ptx
                     </select>
                     <input id=PRFileSelector type=file size=40 multiple>
                     <button id=PRUnloadBtn>UNLOAD</button>
@@ -70,7 +70,7 @@
 
             <div id=PaperTapePunch>
                 <div id=PTCaption>PUNCH</div>
-                <input id=PTView type=text READONLY>
+                <input id=PTView type=text maxlength=132 READONLY>
                 <img id=PTMenuIcon src="./resources/icons8-menu-24.png" alt="Paper-Tape Punch menu icon"
                      title="Click to open the paper-tape punch menu">
                 <div id=PTControlsMenu>
@@ -84,7 +84,7 @@
                             title="Extract tape image as text to a new window"
                             >Extract</button>&nbsp;
                     <button id=PTClearBtn type=button>Clear</button>&nbsp;
-                    <button id=PTCloseBtn type=button>Close</button>
+                    <button id=PTMenuCloseBtn type=button>Close</button>
                 </div>
             </div>
         </div>

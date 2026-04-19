@@ -71,7 +71,7 @@ class ColoredLamp {
     removeEventListener(eventName, handler, useCapture) {
         /* Removes an event handler */
 
-        this.element.addEventListener(eventName, handler, useCapture);
+        this.element.removeEventListener(eventName, handler, useCapture);
     }
 
     /**************************************/
@@ -98,6 +98,13 @@ class ColoredLamp {
         /* Sets the lamp's label */
 
         this.element.textContent = label;
+    }
+
+    /**************************************/
+    setTitle(title) {
+        /* Sets the lamp's title popup */
+
+        this.element.title = title;
     }
 
     /**************************************/
