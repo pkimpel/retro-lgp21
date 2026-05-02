@@ -97,8 +97,6 @@ class FlexoLever {
         /* Complements the visible state of the switch */
 
         this.set(this.state ? 0 : 1);
-        ev?.preventDefault();
-        ev?.stopPropagation();
     }
 
     /**************************************/

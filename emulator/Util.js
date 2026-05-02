@@ -20,8 +20,9 @@ export const logicalTracks = 64;                // logical (LGP-30) number of tr
 export const logicalTrackSize = 64;             // words in a logical (LGP-30) track
 export const minTimeout = 4;                    // browsers will do setTimeout for at least 4ms
 
-export const wordMask = 0xFFFFFFFE;             // 31 bits + spacer bit
-export const absWordMask = 0xEFFFFFFE;          // all but the sign bit
+export const fullWordMask = 0xFFFFFFFF;         // 32 bits including spacer bit
+export const wordMask = 0xFFFFFFFE;             // 31 bits with zero spacer bit
+export const absWordMask = 0xEFFFFFFE;          // all 31 bits but the sign bit
 export const wordSignMask = 0x80000000;         // sign bit mask
 export const orderMask = 0x000F0000;            // instruction order bits (4)
 export const orderShift = 16;                   // bits to shift order field right
@@ -29,7 +30,7 @@ export const trackMask = 0x00003E00;            // address track bits (5)
 export const trackShift = 9;                    // bits to shift track field right
 export const sectorMask = 0x000001FC;           // address sector bits (7)
 export const sectorShift = 2;                   // bits to shift address field right
-export const addressMask = 0x00003FFC;          // instructin address bits (12)
+export const addressMask = 0x00003FFC;          // instruction address bits (12)
 export const addressIncrement = 1 << sectorShift; // value to increment address fields
 
 export const defaultRPM = 1125;                 // default disk revolution speed, rev/min
@@ -37,13 +38,9 @@ export const maxRPM = defaultRPM*100;           // maximum disk revolution speed
 export let nonStandardRPM = false;              // true if RPM has been changed from default
 export let diskRPM = defaultRPM;                // disk revolution speed, rev/minute
 
-// The following are constants once the disk RPM is determined.
-export let wordTime = 0;                        // one word time on the disk [128 words/rev], ms
-export let bitTime = 0;                         // one bit time on the disk, ms
-export let diskCycleTime = 0;                   // one disk cycle (128 words), ms
-export let timingFactor = 1;                    // global emulator speed factor
+export const lgp21OpMnem = "ZBYRIDNMPEUTHCAS";  // LGP-21 opcode mnemonics
 
-const hexRex = /[fgjkqwFGJKQW]/g;               // standard hex characters
+const hexRex = /[abcdefABCDEF]/g;               // standard hex characters
 const lgp21HexXlate = {                         // the weird undigit glyphs come from the paper-tape code
         "a": "f", "A": "f",
         "b": "g", "B": "g",
@@ -52,22 +49,59 @@ const lgp21HexXlate = {                         // the weird undigit glyphs come
         "e": "q", "E": "q",
         "f": "w", "F": "w"};
 
+// The following are constants once the disk RPM is determined.
+export let wordTime = 0;                        // one word time on the disk [128 words/rev], ms
+export let bitTime = 0;                         // one bit time on the disk, ms
+export let diskCycleTime = 0;                   // one disk cycle (128 words), ms
+export let timingFactor = 1;                    // global emulator speed factor
+
 
 /**************************************/
 export function lgp21Hex(v) {
-    /* Converts the value "v" to a hexidecimal string using the LGP-21
-    convention. This is not a particularly efficient way to do this */
+    /* Converts the value "v" to an unsigned 32-bit hexidecimal string using
+    the LGP-21 hex convention. This is not a particularly efficient way to
+    do this */
 
-    return v.toString(16).replace(hexRex, (c) => {
+    return (v >>> 0).toString(16).replace(hexRex, (c) => {
         return lgp21HexXlate[c] ?? "?";
-    }).padStart(7, "0");
+    }).padStart(8, "0");
 }
 
 /**************************************/
 export function lgp21SignedHex(v) {
-    /* Formats the value of "v" as signed LGP-21 hex */
+    /* Formats the value "v" as a signed 32-bit LGP-21 hex */
 
-    return lgp21Hex(v >> 1) + (v & wordSignMask ? "-" : " ");
+    return ((v|0) < 0 ? "-" : " ") + Math.abs(v|0).toString(16).replace(hexRex, (c) => {
+        return lgp21HexXlate[c] ?? "?";
+    }).padStart(8, "0");
+}
+
+/**************************************/
+export function lgp21Signed(v) {
+    /* Formats the value "v" as a signed 2s-complement decimal integer */
+
+    return (v|0).toString();
+}
+
+/**************************************/
+export function lgp21DecAddress(v) {
+    /* Formats the value "v" as decimal track/sector using the format TTSS, but
+    using the LGP-30 address format where TT and SS are both six bit decimal
+    numbers */
+    const addr = Math.abs(v);
+
+    return ((addr >> 6) & 0x3F).toString().padStart(2, "0") +
+           (addr & 0x3F).toString().padStart(2, "0");
+}
+
+/**************************************/
+export function lgp21FormatOp(word) {
+    /* Formats "word" as a mnemonic LGP-21 instruction "Z TTSS" */
+    const bits = word >>> 0;            // retain 2s-complement form
+
+    return ((bits & wordSignMask) ? "-" : " ") +
+           lgp21OpMnem[(bits & orderMask) >>> orderShift] + " " +
+           lgp21DecAddress((bits & addressMask) >>> sectorShift);
 }
 
 /**************************************/

@@ -37,9 +37,9 @@ class ToggleSwitch {
             onImage     path to the image for the switch in the on state */
 
         this.state = 0;                         // current switch state, 0=off
-        this.mainCaptionDiv = null;             // optional main caption element
-        this.topLeftCaptionDiv = null;          // optional top-left caption element
-        this.bottomLeftCaptionDiv = null;       // optional bottom-left caption element
+        this.mainCaptionLabel = null;           // optional main caption element
+        this.topLeftCaptionLabel = null;        // optional top-left caption element
+        this.bottomLeftCaptionLabel = null;     // optional bottom-left caption element
         this.classList = classList || "";       // optional class applied to image and captions
         this.offImage = offImage;               // image used for the off state
         this.onImage = onImage;                 // image used for the on state
@@ -124,30 +124,31 @@ class ToggleSwitch {
 
         switch (location) {
         case ToggleSwitch.captionMain:
-            e = this.mainCaptionDiv;
+            e = this.mainCaptionLabel;
             break;
         case ToggleSwitch.captionTopLeft:
-            e = this.topLeftCaptionDiv;
+            e = this.topLeftCaptionLabel;
             break;
         case ToggleSwitch.captionBottomLeft:
-            e = this.bottomLeftCaptionDiv;
+            e = this.bottomLeftCaptionLabel;
             break;
         }
 
         if (!e) {
-            e = document.createElement("div");
+            e = document.createElement("label");
+            e.htmlFor = this.element.id;
             switch (location) {
             case ToggleSwitch.captionMain:
                 e.className = ToggleSwitch.mainCaptionClass;
-                this.mainCaptionDiv = e;
+                this.mainCaptionLabel = e;
                 break;
             case ToggleSwitch.captionTopLeft:
                 e.className = ToggleSwitch.topLeftCaptionClass;
-                this.topLeftCaptionDiv =  e;
+                this.topLeftCaptionLabel =  e;
                 break;
             case ToggleSwitch.captionBottomLeft:
                 e.className = ToggleSwitch.bottomLeftCaptionClass;
-                this.bottomLeftCaptionDiv = e;
+                this.bottomLeftCaptionLabel = e;
                 break;
             }
 

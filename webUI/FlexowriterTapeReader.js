@@ -31,7 +31,6 @@
 
 export {FlexowriterTapeReader};
 
-import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
 import {Flexowriter} from "./Flexowriter.js";
 
@@ -40,12 +39,12 @@ class FlexowriterTapeReader {
 
     // Static properties
 
-    static defaultFrameRate = 571/60;   // default reading rate, frames/sec
-    static defaultFramePeriod = 1000/FlexowriterTapeReader.defaultFrameRate;
-                                        // default single-frame time, ms
-
+    static defaultReadRate = 571/60;    // reader speed, codes/sec
+    static defaultReadPeriod = 1000/FlexowriterTapeReader.defaultReadRate;
+                                        // default read period, ms/code
     static commentRex = /#[^\x0D\x0A]*/g;
     static newLineRex = /[\x0D\x0A\x0C]+/g;
+
 
     constructor(context, flexowriter) {
         /* Initializes and wires up events for the Paper Tape Reader.
@@ -59,15 +58,15 @@ class FlexowriterTapeReader {
         this.processor = context.processor;
         this.flexowriter = flexowriter;
         this.tapeSupplyBar = $$("PRTapeSupplyBar");
-        this.readerCaption = $$("PRCaption");
-        this.timer = new Util.Timer();
 
-        this.boundMenuClick = this.menuClick.bind(this);
         this.boundFileSelectorChange = this.fileSelectorChange.bind(this);
+        this.boundMenuClick = this.menuClick.bind(this);
+        this.boundRewindReader = this.rewindReader.bind(this);
 
         this.clear();                                   // creates additional instance variables
 
         $$("PRMenuIcon").addEventListener("click", this.boundMenuClick);
+        this.tapeSupplyBar.addEventListener("dblclick", this.boundRewindReader);
     }
 
     /**************************************/
@@ -75,32 +74,13 @@ class FlexowriterTapeReader {
         /* Initializes (and if necessary, creates) the reader unit state */
 
         this.ready = false;             // a tape has been loaded into the reader
-        this.busy = false;              // an I/O is in progress
-        this.canceled = false;          // current I/O canceled
 
-        this.buffer = null;             // reader input buffer (paper-tape reel)
+        this.buffer = null;             // reader input buffer (paper-tape image)
         this.bufLength = 0;             // current input buffer length (characters)
         this.bufIndex = 0;              // 0-relative offset to next character to be read
         this.nextStartStamp = 0;        // earliest time next read can start
 
-        this.makeBusy(false);
         this.setReaderEmpty();
-    }
-
-    /**************************************/
-    makeBusy(busy) {
-        /* Makes the reader busy (I/O in progress) or not busy (idle) */
-
-        this.busy = busy;
-    }
-
-    /**************************************/
-    cancel() {
-        /* Cancels the I/O currently in process */
-
-        if (this.busy) {
-            this.canceled = true;
-        }
     }
 
     /**************************************/
@@ -108,12 +88,25 @@ class FlexowriterTapeReader {
         /* Sets the reader to a not-ready status and empties the buffer */
 
         this.ready = false;
+        this.flexowriter.stopTapeRead();
         this.tapeSupplyBar.value = 0;
         this.buffer = "";                   // discard the input buffer
         this.bufLength = 0;
         this.bufIndex = 0;
         this.$$("PRFileSelector").value = null; // reset the control so the same file can be reloaded
         this.$$("PRFormatSelect").selectedIndex = 0;    // default to Auto
+    }
+
+    /**************************************/
+    rewindReader() {
+        /* Rewinds the current reader buffer to its beginning. This was not a
+        feature supported by the Flexowriter, but is provided as a convenience.
+        Note that it does not rewind to the beginning of the current tape image
+        FILE, but to the beginning of whatever has been loaded into the buffer */
+
+        this.flexowriter.stopTapeRead();
+        this.bufIndex = 0;
+        this.tapeSupplyBar.value = this.bufLength;
     }
 
     /**************************************/
@@ -127,23 +120,33 @@ class FlexowriterTapeReader {
     /**************************************/
     prepareBuffer(imageLength) {
         /* Prepares this.buffer for more image data by assuring that there is
-        sufficient room, resizing it if necessary. If any existing buffer has
-        been read to its end, the buffer is treated as empty and its existing
-        image data is discarded */
+        sufficient room, resizing it if necessary. If all existing buffer data
+        has been read to its end, the buffer is treated as empty and its
+        existing data is discarded, otherwise any read data is discarded */
         let bufIndex = this.bufIndex;
         let bufLength = this.bufLength;
+        let curLength = bufLength - bufIndex;   // current active length
 
         if (!this.buffer) {
             this.buffer = new Uint8Array(imageLength);
-            bufIndex = bufLength = 0;
+            bufIndex = bufLength = 0;   // set new buffer empty
+        } else if (curLength <= 0) {
+            bufIndex = bufLength = 0;   // set existing buffer empty
         }
 
-        if (this.buffer.length - bufLength < imageLength) {
-            // Not enough room in the current buffer, so resize it
-            const oldBuf = this.buffer;
-            this.buffer = new Uint8Array(bufLength + imageLength);
-            this.buffer.set(oldBuf, 0);
-            bufLength += imageLength;
+        // Assure there's enough room for the active + new lengths
+        if (this.buffer.length < bufLength + imageLength) {
+            // Not enough room at end of buffer -- see if compacting will work.
+            if (imageLength <= this.buffer.length - curLength) {
+                this.buffer.copyWithin(0, bufIndex, bufLength);
+            } else {                    // won't fit, so resize buffer
+                const oldBuf = this.buffer;
+                this.buffer = new Uint8Array(curLength + imageLength);
+                this.buffer.set(oldBuf.slice(bufIndex, bufLength), 0);
+            }
+
+            bufLength = curLength;
+            bufIndex = 0;
         }
 
         this.bufIndex = bufIndex;
@@ -158,17 +161,17 @@ class FlexowriterTapeReader {
         const imageLength = image.length;
         let bufLength = this.bufLength;
 
-        console.debug("loadAsPTP");
+        console.debug("Flexowriter Reader: load as PTP");
         this.prepareBuffer(imageLength);
         bufLength = this.bufLength;
 
         for (let x=0; x<imageLength; ++x) {
-            this.buffer[bufLength++] = image[x] & 0b11111;
+            this.buffer[bufLength++] = image[x] & 0x3F;
         }
 
         this.bufLength = bufLength;
-        this.$$("PRTapeSupplyBar").max = bufLength;
-        this.$$("PRTapeSupplyBar").value = bufLength - this.bufIndex;
+        this.tapeSupplyBar.max = bufLength;
+        this.tapeSupplyBar.value = bufLength - this.bufIndex;
         this.ready = true;
     }
 
@@ -181,7 +184,7 @@ class FlexowriterTapeReader {
         const imageLength = text.length;
         let code = 0;
 
-        console.debug("loadAsPTX");
+        console.debug("Flexowriter Reader: load as PTX");
         this.prepareBuffer(imageLength);
         let bufLength = this.bufLength;
 
@@ -193,8 +196,8 @@ class FlexowriterTapeReader {
         }
 
         this.bufLength = bufLength;
-        this.$$("PRTapeSupplyBar").max = bufLength;
-        this.$$("PRTapeSupplyBar").value = bufLength - this.bufIndex;
+        this.tapeSupplyBar.max = bufLength;
+        this.tapeSupplyBar.value = bufLength - this.bufIndex;
         this.ready = true;
     }
 
@@ -211,26 +214,29 @@ class FlexowriterTapeReader {
             tapeFormat = formatSelect.options[formatIndex].value;
         }
 
-        if (!this.busy) {
-            for (const file of fileList) {
-                const fileName = file.name;
-                let readAs = tapeFormat;
-                if (tapeFormat == "Auto") {
-                    let x = fileName.lastIndexOf(".");
-                    readAs = x < 0 ? ".ptp" : fileName.substring(x).toLowerCase();
-                }
+        this.flexowriter.stopTapeRead();
+        for (const file of fileList) {
+            const fileName = file.name;
+            let readAs = tapeFormat;
+            if (tapeFormat == "Auto") {
+                let x = fileName.lastIndexOf(".");
+                readAs = x < 0 ? ".ptp" : fileName.substring(x).toLowerCase();
+            }
 
-                console.debug(`readAs ${readAs} ${fileName} ${file.size} bytes`);
-                switch (readAs) {
-                case ".ptx":
-                    this.loadAsPTX(await file.text());
-                    break;
-                default:
-                    this.loadAsPTP(await file.arrayBuffer());
-                    break;
-                }
+            console.debug(`readAs ${readAs} ${fileName} ${file.size} bytes`);
+            switch (readAs) {
+            case ".ptx":
+                this.loadAsPTX(await file.text());
+                break;
+            default:
+                this.loadAsPTP(await file.arrayBuffer());
+                break;
             }
         }
+
+        setTimeout(() => {
+            this.menuClose();
+        }, 3);
     }
 
     /**************************************/
@@ -277,77 +283,31 @@ class FlexowriterTapeReader {
     }
 
     /**************************************/
-    async read() {
-        /* Initiates the Paper Tape Reader to begin sending frame codes to the
-        Flexowriter for printing, punching, and/or forwarding to the Processor's
-        I/O subsystem. Reads until a COND STOP code is sensed, the end of the
-        tape buffer is encountered, or a cancel request is received. Calls the
-        Flexowriter's forwardCode() function with a non-negative tape code for
-        each frame read, including the stop code, or -1 if the read is canceled,
-        or there is no tape in the reader, or end-of-tape occurs. Frames are
-        read and passed on at the reader's rated speed */
-
-        if (this.busy) {
-            return;                     // already reading
-        }
-
-        const cyclePeriod = Math.max(Flexowriter.defaultCyclePeriod/Util.timingFactor,
-                                     Flexowriter.minCyclePeriod);
+    read() {
+        /* Extracts the next tape code from the buffer and returns it to the
+        caller or -1 if there is no tape in the reader, or end-of-tape occurs.
+        Caller determines the speed of reading */
         let bufLength = this.bufLength; // current buffer length
         let code = 0;                   // current LGP-21 tape code
-        let eob = false;                // end-of-block flag
-        let nextFrameStamp = performance.now(); // time of next character frame
         let x = this.bufIndex;          // current buffer index
 
-        this.canceled = false;
-        this.makeBusy(true);
-        this.readerCaption.classList.add("active");
-
-        // Synchronize timing to the Flexowriter's cycle.
-        if (this.nextStartStamp > nextFrameStamp) {     // still busy from last read
-            nextFrameStamp = this.nextStartStamp;
+        if (x >= bufLength) {           // end of buffer
+            code = -1;
         } else {
-            nextFrameStamp = nextFrameStamp - nextFrameStamp%cyclePeriod + cyclePeriod;
+            code = this.buffer[x];
+            ++x;
+            this.tapeSupplyBar.value = bufLength-x;
         }
 
-        // Read tape frames.
-        do {
-            // Wait for the next frame time.
-            await this.timer.delayUntil(nextFrameStamp);
-            nextFrameStamp += cyclePeriod;
-
-            // Get the next frame.
-            if (this.canceled) {                // canceled by the Flexowriter
-                await this.flexowriter.forwardCode(-1);
-                this.canceled = false;
-                eob = true;
-            } else if (x >= bufLength) {        // end of buffer
-                await this.flexowriter.forwardCode(-1);
-                eob = true;
-            } else {
-                code = this.buffer[x];
-                ++x;
-                this.tapeSupplyBar.value = bufLength-x;
-                if (code == IOCodes.ioCondStop && !this.flexowriter.condStopLever.state) {
-                    eob = true;                 // stop the reader
-                }
-
-                // Send the tape code to the Processor.
-                await this.flexowriter.forwardCode(code);
-            }
-        } while (!eob);
-
         this.bufIndex = x;
-        this.makeBusy(false);
-        this.nextStartStamp = nextFrameStamp;
-        this.readerCaption.classList.remove("active");
+        return code;
     }
 
     /**************************************/
     shutDown() {
         /* Shuts down the device */
 
-        this.timer.clear();
         $$("PRMenuIcon").removeEventListener("click", this.boundMenuClick);
+        this.tapeSupplyBar.removeEventListener("dblclick", this.boundRewindReader);
     }
 }

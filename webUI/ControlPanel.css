@@ -125,13 +125,13 @@ BODY {
     left:               67%;
     top:                50%}
 
-DIV.modeCaptionMain {
+LABEL.modeCaptionMain {
     transform:          translate(-50%, 30px)}
-DIV.modeCaptionTL {
+LABEL.modeCaptionTL {
     transform:          translate(-60px, -32px)}
-DIV.modeCaptionML {
+LABEL.modeCaptionML {
     transform:          translate(-60px, -50%)}
-DIV.modeCaptionBL {
+LABEL.modeCaptionBL {
     transform:          translate(-60px, 14px)}
 
 #ExecuteBtnCaption,
@@ -150,6 +150,23 @@ DIV.modeCaptionBL {
 #FillClearBtnCaption {
     position:           absolute;
     transform:          translate(calc(-100% - 20px), -50%)}
+#RunTimerDiv {
+    position:           absolute;
+    bottom:             8px;
+    left:               50%;
+    width:              auto;
+    transform:          translate(-50%, 0);
+    font-size:          12px;
+    line-height:        1;
+    text-align:         right;
+    padding-left:       8px;
+    padding-right:      8px;
+    padding-top:        4px;
+    padding-bottom:     5px;
+    color:              var(--offWhite);
+    background-color:   black;
+    border:             1px solid #999;
+    box-shadow:         2px 2px 2px #333}
 
 #WhiteFrame {
     position:           absolute;
@@ -158,13 +175,19 @@ DIV.modeCaptionBL {
     width:              100%;
     background-color:   var(--offWhite);
     box-shadow:         inset 4px 4px 4px #333}
-#EmulatorVersion {
+#LGP21Version {
     position:           absolute;
     right:              8px;
     bottom:             4px;
     font-size:          10px;
     font-weight:        bold;
-    color:              var(--gpBlue)}
+    color:              var(--gpBlue);
+    padding:            2px;
+    user-select:        none}
+#LGP21Version.active {
+    font-weight:        bold;
+    color:              white;
+    background-color:   #900}
 
 #ButtonFrame {
     position:           absolute;
@@ -209,7 +232,7 @@ DIV.modeCaptionBL {
     display:            none;
     opacity:            0;
     z-index:            1;
-    background-image:   radial-gradient(#FEC 33%, #EDA 75%, #999)}
+    background-image:   radial-gradient(#FE9 33%, #EDA 75%, #DDC)}
 
 #IOBtn {
     position:           absolute;

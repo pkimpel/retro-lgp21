@@ -43,7 +43,7 @@ class Register {
         this.lastETime = 0;             // emulation time register was last set
         this.clock = clock;             // local copy of clock object
         this.intVal = 0;                // binary value of register: read-only externally
-        this.modVal = (1 << bits);      // maximum value modulus
+        this.modVal = 2**bits;          // maximum value modulus
 
         this.glow = new Float64Array(bits);     // average lamp glow values
     }
@@ -110,7 +110,7 @@ class Register {
            this.updateLampGlow(0);
         }
 
-        this.intVal = (value+1) % this.modVal;
+        this.intVal = (this.intVal+1) % this.modVal;
         return this.intVal;
     }
 

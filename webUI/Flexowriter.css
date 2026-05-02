@@ -97,7 +97,11 @@ BUTTON.flexoLeverDown {
     border:             none}
 #CaseIndicator LABEL {
     font-weight:        bold}
-
+#PrinterCol {
+    position:           absolute;
+    left:               50%;
+    top:                43px;
+    transform:          translate(-50%, 0)}
 #ColorIndicator {
     position:           absolute;
     right:              112px;
@@ -120,9 +124,9 @@ BUTTON.flexoLeverDown {
     right:              6px;
     height:             24px;
     padding:            8px;
-    background-color:   #CCC;
+    background-color:   #94948C;
     border-radius:      6px;
-    border:             1px solid #94948C}
+    border:             1px solid #999}
 
 #PaperTapeFrame BUTTON {
     position:           relative;
@@ -151,7 +155,7 @@ BUTTON.flexoLeverDown {
     top:                0;
     left:               50%;
     transform:          translate(-50%, 0);
-    font-size:          10px;
+    font-size:          12px;
     font-weight:        bold}
 #PRCaption.active {
     color:              #080}
@@ -222,7 +226,7 @@ BUTTON.flexoLeverDown {
     top:                0;
     left:               50%;
     transform:          translate(-50%, 0);
-    font-size:          10px;
+    font-size:          12px;
     font-weight:        bold}
 #PTCaption.active {
     color:              #080}

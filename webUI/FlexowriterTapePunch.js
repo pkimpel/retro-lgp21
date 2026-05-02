@@ -238,6 +238,8 @@ class FlexowriterTapePunch {
         constructs a link to cause the URL to be "downloaded" to the local
         device */
 
+        // Eventually btoaUint8() should be replaced with ArrayBuffer.toBase64().
+
         const url = "data:application/octet-stream;base64," +
                     this.btoaUint8(this.buffer, 0, this.bufLength);
         const hiddenLink = this.doc.createElement("a");

@@ -34,16 +34,22 @@ class ControlPanel {
     static downSwitchImage = "./resources/ToggleDown.png";
     static upSwitchImage = "./resources/ToggleUp.png";
     static midSwitchImage = "./resources/ToggleMid.png";
-    static windowHeight = 456;          // window innerHeight, pixels
+    static windowHeight = 452;          // window innerHeight, pixels
     static windowWidth = 1000;          // window innerWidth, pixels
 
     // Scope trace parameters
-    static scopeTraceBits = 32;
-    static scopeTraceHOffset = 10;
-    static scopeTraceVOffset = 106;
-    static scopeTraceWidth = 1220;
-    static scopeBitWidth = 37.5;
-    static scopeBitHeight = 91;
+    static scopeBeamWidth = 16;         // width of scope trace beam, units
+    static scopeTraceX = 120;           // horizontal offset of scope traces on scope
+    static scopeTraceCY = 384.0;        // vertical offset of C register trace
+    static scopeTraceRY = 649.5;        // vertical offset of R register trace
+    static scopeTraceAY = 915.0;        // vertical offset of A register trace
+    static scopeTraceHOffset = 10;      // horizontal offset of first (sign) bit
+    static scopeTraceVOffset = 106;     // vertical offset of the 0 state
+    static scopeTraceWidth = 1220;      // total width of the trace
+    static scopeBitHeight = 91;         // height of the 1 state
+    static scopeBitWidth = 37.5;        // total width of one bit-time
+    static scopeRampUpWidth = 3;        // width of the bit ramp-up slant
+    static scopeRampDownWidth = 1;      // width of the bit ramp-down slant
 
     // Public instance properties
 
@@ -56,6 +62,7 @@ class ControlPanel {
     lastETime = 0;                      // last emulation clock value
     lastInstructionCount = 0;           // prior total instruction count (for average)
     lastRunTime = 0;                    // prior total run time (for average), ms
+    runTimeOffset = 0;                  // disk runTime offset for display purposes
 
     /**************************************/
     constructor(context) {
@@ -68,13 +75,15 @@ class ControlPanel {
 
         this.context = context;
         this.config = context.config;
+        this.processor = context.processor;
         this.systemShutdown = context.systemShutdown;
 
         this.boundUpdatePanel = this.updatePanel.bind(this);
         this.boundBeforeUnload = this.beforeUnload.bind(this);
-        this.boundStartSystem = this.startSystem.bind(this);
-        this.boundControlSwitchClick = this.controlSwitchClick.bind(this);
         this.boundPanelUnload = this.panelUnload.bind(this);
+        this.boundControlSwitchClick = this.controlSwitchClick.bind(this);
+        this.boundResetTiming = this.resetTiming.bind(this);
+        this.boundToggleTracing = this.toggleTracing.bind(this);
         this.boundShutDown = this.shutDown.bind(this);
 
         // Create the Control Panel window
@@ -91,7 +100,7 @@ class ControlPanel {
                        `,innerWidth=${this.innerWidth},innerHeight=${this.innerHeight}`;
         }
 
-        openPopup(window, "../webUI/ControlPanel.html", "retro-LGP-21.ControlPanel",
+        openPopup(window, "../webUI/ControlPanel.html", "retro-lgp21.ControlPanel",
                 "location=no,scrollbars,resizable" + geometry,
                 this, this.panelOnLoad);
     }
@@ -114,9 +123,18 @@ class ControlPanel {
     }
 
     /**************************************/
+    resetTiming(ev) {
+        /* Double-click handler for the HeaderTable element. Sets this.runTimeOffset
+        to the current Disk.RunTime to zero the display of      total run time on the panel */
+        const disk = this.context.processor.disk; // local copy of Disk reference
+
+        this.runTimeOffset = disk.runTime;
+    }
+
+    /**************************************/
     async panelOnLoad(ev) {
         /* Initializes the Control Panel window and user interface */
-        const p = this.context.processor;
+        const p = this.processor;
         let parent = null;              // parent sub-panel DOM object
 
         this.doc = ev.target;
@@ -124,13 +142,13 @@ class ControlPanel {
         let body = this.doc.body;
 
         parent = this.$$("SwitchFrame");
+        this.runTime = this.$$("RunTime");
 
         this.bs4Switch = new ToggleSwitch(parent, null, null, "BS4Switch", "bs4Switch",
                         ControlPanel.downSwitchImage, ControlPanel.upSwitchImage);
         this.bs4Switch.setCaption("BS-4",  ToggleSwitch.captionMain);
         this.bs4Switch.setCaption("ON",    ToggleSwitch.captionTopLeft);
         this.bs4Switch.setCaption("OFF",   ToggleSwitch.captionBottomLeft);
-        this.bs4Switch.set(0);
         this.bs4Switch.set(this.config.getNode("ControlPanel.bs4Switch"));
         p.bs4Switch = this.bs4Switch.state;
 
@@ -139,7 +157,6 @@ class ControlPanel {
         this.bs8Switch.setCaption("BS-8",  ToggleSwitch.captionMain);
         this.bs8Switch.setCaption("ON",    ToggleSwitch.captionTopLeft);
         this.bs8Switch.setCaption("OFF",   ToggleSwitch.captionBottomLeft);
-        this.bs8Switch.set(0);
         this.bs8Switch.set(this.config.getNode("ControlPanel.bs8Switch"));
         p.bs8Switch = this.bs8Switch.state;
 
@@ -148,7 +165,6 @@ class ControlPanel {
         this.bs16Switch.setCaption("BS-16", ToggleSwitch.captionMain);
         this.bs16Switch.setCaption("ON",    ToggleSwitch.captionTopLeft);
         this.bs16Switch.setCaption("OFF",   ToggleSwitch.captionBottomLeft);
-        this.bs16Switch.set(0);
         this.bs16Switch.set(this.config.getNode("ControlPanel.bs16Switch"));
         p.bs16Switch = this.bs16Switch.state;
 
@@ -157,7 +173,6 @@ class ControlPanel {
         this.bs32Switch.setCaption("BS-32", ToggleSwitch.captionMain);
         this.bs32Switch.setCaption("ON",    ToggleSwitch.captionTopLeft);
         this.bs32Switch.setCaption("OFF",   ToggleSwitch.captionBottomLeft);
-        this.bs32Switch.set(0);
         this.bs32Switch.set(this.config.getNode("ControlPanel.bs32Switch"));
         p.bs32Switch = this.bs32Switch.state;
 
@@ -166,7 +181,6 @@ class ControlPanel {
         this.tcSwitch.setCaption("TC",    ToggleSwitch.captionMain);
         this.tcSwitch.setCaption("ON",    ToggleSwitch.captionTopLeft);
         this.tcSwitch.setCaption("OFF",   ToggleSwitch.captionBottomLeft);
-        this.tcSwitch.set(0);
         this.tcSwitch.set(this.config.getNode("ControlPanel.tcSwitch"));
         p.tcSwitch = this.tcSwitch.state;
 
@@ -177,35 +191,37 @@ class ControlPanel {
         this.modeSwitch.setCaption("MAN\nINPUT", ThreeWaySwitch.captionTopLeft);
         this.modeSwitch.setCaption("ONE\nOPER",  ThreeWaySwitch.captionMiddleLeft);
         this.modeSwitch.setCaption("NORMAL",     ThreeWaySwitch.captionBottomLeft);
-        this.modeSwitch.mainCaptionDiv.classList.add("modeCaptionMain");
-        this.modeSwitch.topLeftCaptionDiv.classList.add("modeCaptionTL");
-        this.modeSwitch.bottomLeftCaptionDiv.classList.add("modeCaptionBL");
-        this.modeSwitch.middleLeftCaptionDiv.classList.add("modeCaptionML");
+        this.modeSwitch.mainCaptionLabel.classList.add("modeCaptionMain");
+        this.modeSwitch.topLeftCaptionLabel.classList.add("modeCaptionTL");
+        this.modeSwitch.bottomLeftCaptionLabel.classList.add("modeCaptionBL");
+        this.modeSwitch.middleLeftCaptionLabel.classList.add("modeCaptionML");
         this.modeSwitch.set(this.config.getNode("ControlPanel.modeSwitch"));
-        p.modeSwitch = this.modeSwitch.state;
+        // Mode Switch state will be set after power-on to get Man Input effects.
 
         parent = this.$$("ButtonFrame");
 
         this.powerBtn = new ColoredLamp(parent, null, null, "PowerBtn", "POWER", "squareButton", "whiteButtonLit");
-        this.powerBtn.title = "Double-click to power off and shut down the emulator";
+        this.powerBtn.setTitle("DOUBLE-click to power off and shut down the emulator");
         this.ioBtn = new ColoredLamp(parent, null, null, "IOBtn", "I/O", "squareButton", "whiteButtonLit");
         this.stopBtn = new ColoredLamp(parent, null, null, "StopBtn", "STOP", "squareButton redButton", "redButtonLit");
         this.startBtn = new ColoredLamp(parent, null, null, "StartBtn", "START", "squareButton", "whiteButtonLit");
 
         this.scopePathC = this.$$("ScopeCTrace");
-        this.scopePathI = this.$$("ScopeITrace");
+        this.scopePathR = this.$$("ScopeRTrace");
         this.scopePathA = this.$$("ScopeATrace");
 
-        this.$$("EmulatorVersion").textContent = Version.lgp21Version;
+        this.$$("LGP21Version").textContent = Version.lgp21Version;
         this.window.addEventListener("beforeunload", this.boundBeforeUnload);
         this.window.addEventListener("unload", this.boundPanelUnload);
         this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
+        this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
+        this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
         this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
+        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing, false);
         //this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
 
         // Power up and initialize the system.
-        this.powerBtn.set(0);
-        this.powerBtn.addEventListener("click", this.boundStartSystem);
+        this.startSystem();
 
         // Recalculate scaling and offsets after initial window resize.
         this.config.restoreWindowGeometry(this.window,
@@ -216,15 +232,17 @@ class ControlPanel {
     startSystem(ev) {
         /* Powers up and initializes the system for operation */
 
+        this.powerBtn.set(0);
         this.window.setTimeout(async () => {
-            this.powerBtn.removeEventListener("click", this.boundStartSystem);
-            await this.context.processor.powerUp();
+            await this.processor.powerUp();
             this.$$("PowerBtnFX").style.display = "block";
             this.$$("PowerBtnFX").classList.add("powerUp");
             this.window.setTimeout(() => {      // wait for the DC power supplies...
                 this.powerBtn.set(1);
+                this.processor.modeSwitchChange(this.modeSwitch.state); // initialize processor mode
                 this.$$("PowerBtnFX").classList.remove("powerUp");
                 this.$$("PowerBtnFX").style.display = "none";
+                this.updatePanel();             // initialize the scope traces
                 this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
             }, 4000);
         }, 500);
@@ -233,23 +251,26 @@ class ControlPanel {
     /**************************************/
     openDebugPanel(ev) {
         /* Opens the DebugPanelDiv and wires up its events */
-        const p = this.context.processor;
+        const p = this.processor;
 
     }
 
     /**************************************/
     toggleTracing(ev) {
         /* Toggles the Processor's tracing option */
-        const p = this.context.processor;
+        const p = this.processor;
 
         //this.$$("FrontPanel").focus();  // de-select the version <div>
 
         p.tracing = !p.tracing;
         if (p.tracing) {
             ev.target.classList.add("active");
+            ev.target.title = "Emulator tracing enabled";
             console.log("<TRACE ON>");
+            p.traceHeading();
         } else {
             ev.target.classList.remove("active");
+            ev.target.title = "";
             console.log("<TRACE OFF>");
         }
     }
@@ -259,31 +280,38 @@ class ControlPanel {
         /* Draws a scope trace for a 32-bit value using SVG <path> "id" and
         starting at x0, y0 */
         const h = ControlPanel.scopeBitHeight;
-        const w = ControlPanel.scopeBitWidth;
-        let word = value;
-        let bit = 0;
-        let lastBit = 0;
-        let tail = ControlPanel.scopeTraceWidth;
-        let dx = ControlPanel.scopeTraceHOffset;
+        const bw = ControlPanel.scopeBitWidth;
+        const rd = ControlPanel.scopeRampDownWidth;
+        const ru = ControlPanel.scopeRampUpWidth;
 
-        let d = `M${x0},${y0+ControlPanel.scopeTraceVOffset}`;
+        let word = (value >>> 0);               // value to trace (in 2s-complement)
+        let bit = 0;                            // current bit value
+        let lastBit = 0;                        // prior bit value
+        let rw = 0;                             // vertical trace ramp width (up/down)
+        let tail = ControlPanel.scopeTraceWidth - ControlPanel.scopeBeamWidth;
+                                                // distance left on the trace
+        let dx = ControlPanel.scopeTraceHOffset - ControlPanel.scopeBeamWidth/2;
+                                                // cumulative undrawn horizontal trace
+
+        let d = `M${x0+ControlPanel.scopeBeamWidth/2},${y0+ControlPanel.scopeTraceVOffset}`;
         while (word) {
             bit = word & Util.wordSignMask;
             if (bit == lastBit) {
-                dx += w;
+                dx += bw;
             } else {
-                d += ` h${dx} v${bit ? -h : h}`;
-                tail -= dx;
-                dx = w;
+                lastBit = bit;
+                rw = bit ? ru : rd;
+                d += ` h${dx} l${rw},${bit ? -h : h}`;
+                tail -= dx + rw;
+                dx = bw - rw;
             }
 
-            lastBit = bit;
             word <<= 1;
         }
 
         if (lastBit) {
-            d += ` h${dx} v${h}`;
-            tail -= dx;
+            d += ` h${dx} l${rw},${h}`;
+            tail -= dx + rw;
         }
 
         d += ` h${tail}`;
@@ -293,7 +321,7 @@ class ControlPanel {
     /**************************************/
     updatePanel() {
         /* Updates the panel registers and flip-flops from processor state */
-        const p = this.context.processor;
+        const p = this.processor;
 
         if (!p) {
             return;                     // probably got caught in a shutdown
@@ -307,13 +335,21 @@ class ControlPanel {
             p.updateLampGlow(0);
         }
 
-        this.ioBtn.set(0 /*** TBD ***/);
+        const now = performance.now();
+        let rt = p.disk.runTime;
+        while (rt < 0) {
+            rt += now;
+        }
+
+        this.runTime.textContent = ((rt-this.runTimeOffset)/1000).toFixed(2).padStart(9, "0");
+
+        this.ioBtn.set(p.activeIODevice ? 1 : 0);
         this.stopBtn.set(p.blocked ? 1 : 0);
         this.startBtn.set(p.blocked ? 0 : 1);
 
-        this.drawScopeTrace(this.scopePathC, 120, 384.0, /**p.C.value**/ 100);
-        this.drawScopeTrace(this.scopePathI, 120, 649.5, /**p.I.value**/ performance.now());
-        this.drawScopeTrace(this.scopePathA, 120, 915.0, /**p.A.value**/ Math.random()*Util.wordMask);
+        this.drawScopeTrace(this.scopePathC, ControlPanel.scopeTraceX, ControlPanel.scopeTraceCY, p.C.value & 0x80003FFF); /**DEBUG 100 **/
+        this.drawScopeTrace(this.scopePathR, ControlPanel.scopeTraceX, ControlPanel.scopeTraceRY, p.R.value);              /**DEBUG performance.now() **/
+        this.drawScopeTrace(this.scopePathA, ControlPanel.scopeTraceX, ControlPanel.scopeTraceAY, p.A.value);              /**DEBUG Math.random()*Util.wordMask **/
 
         this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
     }
@@ -322,7 +358,7 @@ class ControlPanel {
     controlSwitchClick(ev) {
         /* Event handler for the pane's switch controls */
         let e = ev.target;
-        const p = this.context.processor;
+        const p = this.processor;
 
         switch (e.id) {
         case "PowerBtn":
@@ -333,10 +369,7 @@ class ControlPanel {
         case "IOBtn":
             p.panelClearIO();
             break;
-        case "StopBtn":
-            p.stop();
-            break;
-        case "StartBtn":
+        case "StartBtn":                // Note: StopBtn is just a lamp
             p.start();
             break;
 
@@ -365,13 +398,14 @@ class ControlPanel {
             this.config.putNode("ControlPanel.tcSwitch", this.tcSwitch.state);
             p.tcSwitch = this.tcSwitch.state;
             break;
+
         case "ModeSwitch":
             this.modeSwitch.flip();
             this.config.putNode("ControlPanel.modeSwitch", this.modeSwitch.state);
 
-            switch (this.tcSwitch.state) {
+            switch (this.modeSwitch.state) {
             case ThreeWaySwitch.stateOff:       // ONE OPERATION
-                p.modeSwitchChange(Processor.mode1Operation);
+                p.modeSwitchChange(Processor.modeOneOperation);
                 break;
             case ThreeWaySwitch.stateUp:        // MANUAL INPUT
                 p.modeSwitchChange(Processor.modeManInput);
@@ -387,6 +421,19 @@ class ControlPanel {
             break;
         case "FillClearBtn":
             p.panelFillClear();
+            break;
+
+        default:
+            // Golly, this is a kludge...
+            if (e.tagName == "LABEL") {
+                if (e.classList.contains("modeCaptionTL")) {
+                    p.modeSwitchChange(Processor.modeManInput);
+                } else if (e.classList.contains("modeCaptionML")) {
+                    p.modeSwitchChange(Processor.modeOneOperation);
+                } else if (e.classList.contains("modeCaptionBL")) {
+                    p.modeSwitchChange(Processor.modeNormal);
+                }
+            }
             break;
         }
     }
@@ -417,6 +464,12 @@ class ControlPanel {
             this.intervalToken = 0;
         }
 
+        // Clear the scope.
+        this.scopePathC.setAttribute("d", "");
+        this.scopePathR.setAttribute("d", "");
+        this.scopePathA.setAttribute("d", "");
+
+        // Ramp down.
         this.$$("PowerBtnFX").style.display = "block";
         this.$$("PowerBtnFX").classList.add("powerDown");
         this.window.setTimeout(() => {
@@ -425,9 +478,12 @@ class ControlPanel {
             this.$$("PowerBtnFX").style.display = "none";
 
             this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
+            this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
             //this.$$("GPLogoTurquoise").removeEventListener("dblClick", this.boundOpenDebugPanel);
             this.config.putWindowGeometry(this.window, "ControlPanel");
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);
+            this.$$("RunTimerDiv").removeEventListener("dblclick", this.boundResetTiming);
+            this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing, false);
             this.window.removeEventListener("beforeunload", this.boundBeforeUnload);
             this.window.removeEventListener("unload", this.boundPanelUnload);
             this.context.systemShutDown();

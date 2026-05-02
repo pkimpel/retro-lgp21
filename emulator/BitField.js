@@ -6,6 +6,8 @@
 *       http://www.opensource.org/licenses/mit-license.php
 ************************************************************************
 * JavaScript class module for bit field extraction and insertion.
+* Bit numbers start at 0 for the low-order bit and increase for the
+* higher-order bits.
 ************************************************************************
 * 2026-03-30  P.Kimpel
 *   Original version, from retro-g15 BitField.js.

@@ -153,14 +153,14 @@ IMG.toggleSwitch {
     transform:          translate(-50%, -50%)}
 IMG.toggleSwitch.toggleLarge {
     width:              36px}
-DIV.toggleCaptionMain {
+LABEL.toggleCaptionMain {
     position:           absolute;
     line-height:        1;
     transform:          translate(-50%, 18px);
     text-align:         center;
     font-size:          10px;
     color:              white}
-DIV.toggleCaptionTopLeft {
+LABEL.toggleCaptionTopLeft {
     position:           absolute;
     width:              8ch;
     line-height:        1;
@@ -168,7 +168,7 @@ DIV.toggleCaptionTopLeft {
     text-align:         right;
     font-size:          8px;
     color:              white}
-DIV.toggleCaptionMiddleLeft {
+LABEL.toggleCaptionMiddleLeft {
     position:           absolute;
     width:              8ch;
     line-height:        1;
@@ -176,7 +176,7 @@ DIV.toggleCaptionMiddleLeft {
     text-align:         right;
     font-size:          8px;
     color:              white}
-DIV.toggleCaptionBottomLeft {
+LABEL.toggleCaptionBottomLeft {
     position:           absolute;
     width:              8ch;
     line-height:        1;

@@ -46,7 +46,7 @@ class SystemConfig {
             condStopLever: 0,
             punchOnLever: 0,
             manInputLever: 0,
-            marginLeft: 0,
+            marginLeft: 1,
             columns: 132,
             tabs: "6,11,16,21,26,31,36,41,46,51,56,61,66,71,76,81,86,91,96,101,106,111,116,121,126"
         },
@@ -175,6 +175,7 @@ class SystemConfig {
 
         // Delete/modify obsolete configuration properties.
             // (RFE)
+        delete this.configData.Typewriter;
 
         // Recursively merge any new properties from the defaults.
         this.sortaDeepMerge(this.configData, SystemConfig.defaultConfig);
@@ -438,10 +439,10 @@ class SystemConfig {
         this.$$("SystemMultiScreen").checked = cd.multiScreen;
         this.$$("SystemMultiScreen").disabled = !cd.persistentWindows;
 
-        // Typewriter
-        this.$$("MarginLeft").value = x = cd.Typewriter.marginLeft;
-        this.$$("Columns").value = cd.Typewriter.columns;
-        this.$$("TabStops").value = cd.Typewriter.tabs;
+        // Flexowriter
+        this.$$("MarginLeft").value = x = cd.Flexowriter.marginLeft;
+        this.$$("Columns").value = cd.Flexowriter.columns;
+        this.$$("TabStops").value = cd.Flexowriter.tabs;
 
         this.$$("MessageArea").textContent = "LGP-21 System Configuration loaded.";
         this.window.focus();
@@ -473,14 +474,15 @@ class SystemConfig {
         case "MarginLeft":
             v = editInteger(ev.target.value, 0, 255, "Margin Left");
             if (!isNaN(v)) {
-                cd.Typewriter.marginLeft = v;
+                v = Math.max(v, 1);
+                cd.Flexowriter.marginLeft = v;
                 ev.target.value = v;
             }
             break;
         case "Columns":
             v = editInteger(ev.target.value, 0, 255, "Columns");
             if (!isNaN(v)) {
-                cd.Typewriter.columns = v;
+                cd.Flexowriter.columns = v;
                 ev.target.value = v;
             }
             break;
@@ -535,14 +537,14 @@ class SystemConfig {
         this.$$("SystemMultiScreen").enabled = !cd.persistentWindows;
         cd.multiScreen =        (this.$$("SystemMultiScreen").checked ? 1 : 0);
 
-        // Typewriter
+        // Flexowriter
         e = this.$$("MarginLeft");
-        x = Math.min(Math.max(parseInt(e.value, 10) ?? 0, 0), 255);
-        cd.Typewriter.marginLeft = x;
+        x = Math.min(Math.max(parseInt(e.value, 10) ?? 0, 1), 255);
+        cd.Flexowriter.marginLeft = x;
         e = this.$$("Columns")
-        x = Math.min(Math.max(parseInt(e.value, 10) ?? 0, 0), 255);
-        cd.Typewriter.columns = x;
-        cd.Typewriter.tabs = this.$$("TabStops").value.trim();
+        x = Math.min(Math.max(parseInt(e.value, 10) ?? 0, cd.Flexowriter.marginLeft+16), 255);
+        cd.Flexowriter.columns = x;
+        cd.Flexowriter.tabs = this.$$("TabStops").value.trim();
 
         this.determineWindowConfigMode().then((msg) => {
             this.flushHandler();        // store the configuration

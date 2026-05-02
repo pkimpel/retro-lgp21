@@ -34,25 +34,26 @@ class ThreeWaySwitch {
     static stateDown = 2;
 
 
-    constructor(parent, x, y, id, classList, offImage, onImage1, onImage2) {
+    constructor(parent, x, y, id, classList, offImage, upImage, downImage) {
         /* Parameters:
             parent      the DOM container element for this switch object.
             x & y       coordinates of the center of the switch.
             id          the DOM id for the lamp object.
             classList   CSS class name applied to image and captions
             offImage    path to image for the switch in the off state.
-            onImage1    path to the image for the switch in the up state
-            onImage2    path to the image for the switch in the down state */
+            upImage    path to the image for the switch in the up state
+            downImage    path to the image for the switch in the down state */
 
         this.state = ThreeWaySwitch.stateOff;   // current switch state, 0=off, 1=up, 2=down
-        this.mainCaptionDiv = null;             // optional main caption element
-        this.topLeftCaptionDiv = null;          // optional top-left caption element
-        this.bottomLeftCaptionDiv = null;       // optional bottom-left caption element
-        this.middleLeftCaptionDiv = null;       // optional middle-left caption element
+        this.priorState = ThreeWaySwitch.stateDown; // prior state of the switch
+        this.mainCaptionLabel = null;           // optional main caption element
+        this.topLeftCaptionLabel = null;        // optional top-left caption element
+        this.bottomLeftCaptionLabel = null;     // optional bottom-left caption element
+        this.middleLeftCaptionLabel = null;     // optional middle-left caption element
         this.classList = classList || "";       // optional class applied to image and captions
         this.offImage = offImage;               // image used for the off state
-        this.onImage1 = onImage1;               // image used for the lower on state
-        this.onImage2 = onImage2;               // image used for the upper on state
+        this.upImage = upImage;                 // image used for the lower on state
+        this.downImage = downImage;             // image used for the upper on state
         this.x = x;
         this.y = y;
         this.boundCaptionClick = this.captionClick.bind(this);
@@ -93,17 +94,18 @@ class ThreeWaySwitch {
         /* Changes the visible state of the switch according to the value
         of "state" */
 
-        if (this.state != state) {          // the state has changed
+        if (this.state != state) {              // the state has changed
+            this.priorState = this.state;
             switch (state) {
-            case ThreeWaySwitch.stateDown:  // down position
+            case ThreeWaySwitch.stateUp:        // up (1) position
                 this.state = state;
-                this.element.src = this.onImage1;
+                this.element.src = this.upImage;
                 break;
-            case ThreeWaySwitch.stateUp:    // up position
+            case ThreeWaySwitch.stateDown:      // down (2) position
                 this.state = state;
-                this.element.src = this.onImage2;
+                this.element.src = this.downImage;
                 break;
-            default:                        // middle (off) position
+            default:                            // middle (0=off) position
                 this.state = ThreeWaySwitch.stateOff;
                 this.element.src = this.offImage;
                 break;
@@ -113,9 +115,20 @@ class ThreeWaySwitch {
 
     /**************************************/
     flip() {
-        /* Increments the visible state of the switch */
+        /* Steps the state of the switch */
 
-        this.set(this.state+1);
+        switch (this.state) {
+        case ThreeWaySwitch.stateUp:            // up (1) position
+            this.set(ThreeWaySwitch.stateOff);
+            break;
+        case ThreeWaySwitch.stateDown:          // down (2) position
+            this.set(ThreeWaySwitch.stateOff);
+            break;
+        default:                                // middle (0=off) position
+            this.set(this.priorState == ThreeWaySwitch.stateUp ?
+                    ThreeWaySwitch.stateDown : ThreeWaySwitch.stateUp);
+            break;
+        } // switch state
     }
 
     /**************************************/
@@ -126,15 +139,15 @@ class ThreeWaySwitch {
         switch(true) {
         case e.classList.contains(ThreeWaySwitch.topLeftCaptionClass):
             this.set(ThreeWaySwitch.stateUp);
-            ev.stopPropagation();
+            //ev.stopPropagation();
             break;
         case e.classList.contains(ThreeWaySwitch.bottomLeftCaptionClass):
-            this.set(ThreeWaySwitch.stateOff);
-            ev.stopPropagation();
+            this.set(ThreeWaySwitch.stateDown);
+            //ev.stopPropagation();
             break;
         case e.classList.contains(ThreeWaySwitch.middleLeftCaptionClass):
-            this.set(ThreeWaySwitch.stateDown);
-            ev.stopPropagation();
+            this.set(ThreeWaySwitch.stateOff);
+            //ev.stopPropagation();
             break;
         }
     }
@@ -147,37 +160,38 @@ class ThreeWaySwitch {
 
         switch (location) {
         case ThreeWaySwitch.captionMain:
-            e = this.mainCaptionDiv;
+            e = this.mainCaptionLabel;
             break;
         case ThreeWaySwitch.captionTopLeft:
-            e = this.topLeftCaptionDiv;
+            e = this.topLeftCaptionLabel;
             break;
         case ThreeWaySwitch.captionBottomLeft:
-            e = this.bottomLeftCaptionDiv;
+            e = this.bottomLeftCaptionLabel;
             break;
         case ThreeWaySwitch.captionMiddleLeft:
-            e = this.middleLeftCaptionDiv;
+            e = this.middleLeftCaptionLabel;
             break;
         }
 
         if (!e) {
-            e = document.createElement("div");
+            e = document.createElement("label");
+            e.htmlFor = this.element.id;
             switch (location) {
             case ThreeWaySwitch.captionMain:
                 e.className = ThreeWaySwitch.mainCaptionClass;
-                this.mainCaptionDiv = e;
+                this.mainCaptionLabel = e;
                 break;
             case ThreeWaySwitch.captionTopLeft:
                 e.className = ThreeWaySwitch.topLeftCaptionClass;
-                this.topLeftCaptionDiv =  e;
+                this.topLeftCaptionLabel =  e;
                 break;
             case ThreeWaySwitch.captionBottomLeft:
                 e.className = ThreeWaySwitch.bottomLeftCaptionClass;
-                this.bottomLeftCaptionDiv = e;
+                this.bottomLeftCaptionLabel = e;
                 break;
             case ThreeWaySwitch.captionMiddleLeft:
                 e.className = ThreeWaySwitch.middleLeftCaptionClass;
-                this.middleLeftCaptionDiv = e;
+                this.middleLeftCaptionLabel = e;
                 break;
             }
 

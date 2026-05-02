@@ -8,10 +8,12 @@
 * JavaScript class module for the General Precision LGP-21 processor.
 *
 * Register, flip-flop, and signal names are taken mostly from the LGP-21
-* "Maintenance and Training" manual:
+* "Maintenance and Training Manual" (MTM):
 *   https://bitsavers.org/pdf/generalPrecision/LGP-21/
-            ESD1060_LGP-21_Maintenance_and_Training_Manual.pdf.
-*
+*           ESD1060_LGP-21_Maintenance_and_Training_Manual.pdf.
+* Also see the "LGP-21 Programming Manual":
+*   https://bitsavers.org/pdf/generalPrecision/LGP-21/
+*           LGP-21_Programming_Manual_1963.pdf.
 ************************************************************************
 * 2026-03-28  P.Kimpel
 *   Original version.
@@ -20,25 +22,69 @@
 export {Processor}
 
 import * as Util from "./Util.js";
+import * as IOCodes from "./IOCodes.js";
 
 import {Disk} from "./Disk.js";
 import {FlipFlop} from "./FlipFlop.js";
 import {Register} from "./Register.js";
 
 
+class RegisterQ extends Register {
+    get Q1() {return this.getBit(3)}
+    set Q1(v) {return this.setBit(3, v)}
+    get Q2() {return this.getBit(2)}
+    set Q2(v) {return this.setBit(2, v)}
+    get Q3() {return this.getBit(1)}
+    set Q3(v) {return this.setBit(1, v)}
+    get Q4() {return this.getBit(0)}
+    set Q4(v) {return this.setBit(0, v)}
+} // class RegisterQ
+
+class RegisterP extends Register {
+    get P1() {return this.getBit(5)}
+    set P1(v) {return this.setBit(5, v)}
+    get P2() {return this.getBit(4)}
+    set P2(v) {return this.setBit(4, v)}
+    get P3() {return this.getBit(3)}
+    set P3(v) {return this.setBit(3, v)}
+    get P4() {return this.getBit(2)}
+    set P4(v) {return this.setBit(2, v)}
+    get P5() {return this.getBit(1)}
+    set P5(v) {return this.setBit(1, v)}
+    get P6() {return this.getBit(0)}
+    set P6(v) {return this.setBit(0, v)}
+} // class RegisterP
+
+
 class Processor {
 
-    // Processor execution phases
-    static blocked = 0;                                 // Q2 + O1 + bQ
-    static searchInstruction = 1;                       // /F . /G . /H
-    static loadInstruction = 2;                         // /F .  G . /H
-    static searchOperand = 3;                           //  F . /G . /H
-    static executeInstruction = 4;                      //  F .  G . /H
-
-    // MODE switch values
-    static mode1Operation = 0;
+    // MODE switch values.
+    static modeOneOperation = 0;
     static modeManInput = 1;
     static modeNormal = 2;
+
+    // I/O Device codes.
+    static devFlexowriter = 2;
+    static devTallyReader = 0;
+    static devTallyPunch = 6;
+
+    // Instruction order codes.
+    static opSenseHalt = 0;
+    static opBring = 1;
+    static opStoreAddress = 2;
+    static opStoreReturn = 3;
+    static opInput = 4;                 // also Shift
+    static opDivide = 5;
+    static opMultiplyLow = 6;           // yields low-order product bits
+    static opMultiply = 7;              // yields high-order product bits
+    static opPrint = 8;
+    static opExtract = 9;
+    static opTransfer = 10;
+    static opTest = 11;
+    static opStoreHold = 12;
+    static opStoreClear = 13;
+    static opAdd = 14;
+    static opSubtract = 15;
 
 
     constructor(context) {
@@ -52,32 +98,30 @@ class Processor {
         this.F  = new FlipFlop(this.disk, false);       // instruction phase flip-flops
         this.G  = new FlipFlop(this.disk, false);       //     "
         this.H  = new FlipFlop(this.disk, false);       //     "
+        this.K  = new FlipFlop(this.disk, false);       // miscellaneous control
+        this.X  = new FlipFlop(this.disk, false);       // true => I/O completed
 
-        this.P1 = new FlipFlop(this.disk, false);       // high-order bit of P register
-        this.P2 = new FlipFlop(this.disk, false);       //
-        this.P3 = new FlipFlop(this.disk, false);       //
-        this.P4 = new FlipFlop(this.disk, false);       //
-        this.P5 = new FlipFlop(this.disk, false);       //
-        this.P6 = new FlipFlop(this.disk, false);       // low-order bit of P register
-
-        this.Q1 = new FlipFlop(this.disk, false);       // high-order bit of Q register
-        this.Q2 = new FlipFlop(this.disk, false);       //
-        this.Q3 = new FlipFlop(this.disk, false);       //
-        this.Q4 = new FlipFlop(this.disk, false);       // low-order bit of Q register
-
-        // Registers (additional registers are part of the Disk object)
+        // Registers (some registers are implemented in the Disk object)
         this.A  = this.disk.regA;                       // accumulator register
         this.C  = this.disk.regC;                       // instruction counter register
-        this.I  = this.disk.regI;                       // current instruction word
+        this.R  = this.disk.regR;                       // current instruction word
         this.AStarLow = this.disk.regAStarLow;          // double-precision register lower half
         this.AStarHigh = this.disk.regAStarHigh;        // double-precision register upper half
 
+        this.P = new RegisterP(6, this.disk, false);    // track Nr, I/O codes
+        this.Q = new RegisterQ(4, this.disk, false);    // op code, misc flags
+
         // General emulator state
-        this.blocked = true;                            // true if Processor cannot run
+        this.blocked = true;                            // true if emulation halted
+        this.dataWord = 0;                              // last-fetched instruction operand word
+        this.lastOpDiskTime = 0;                        // emulated time prior op ended, WT (tracing)
+        this.lastOpEnded = true;                        // used to detect end-of-op (tracing)
+        this.opAddr = 0;                                // address of last-fetched instruction (tracing)
+        this.opWord = 0;                                // last-fetched instruction
         this.order = 0;                                 // current instruction op code
         this.overflowed = 0;                            // 1 if last addition overflowed
         this.poweredOn = false;                         // powered up and ready to run
-        this.skipInstruction = false;                   // skip next instruction during Phase 2
+        this.stopRequested = false;                     // blocked state pending
         this.tracing = false;                           // trace command debugging
 
         // UI state from Control Panel
@@ -85,14 +129,12 @@ class Processor {
         this.bs8Switch = 0;                             // BS-8 switch
         this.bs16Switch = 0;                            // BS-16 switch
         this.bs32Switch = 0;                            // BS-32 switch
-        this.modeSwitch = 0;                            // 0=one-oper, 1=man-input, 2=normal
+        this.modeSwitch = -1; // force change           // 0=one-oper, 1=man-input, 2=normal
         this.tcSwitch = 0;                              // used by order 11, T: Conditional Transfer
 
         // I/O Subsystem
-        this.activeIODevice = null;                     // current I/O device object
-        this.canceledIO = false;                        // current I/O has been canceled
-        this.duplicateIO = false;                       // second I/O of same type initiated while first in progress
-        this.hungIO = false;                            // current I/O is intentionally hung, awaiting cancel
+        this.activeIODevice = null;                     // current I/O device object (not null => Faf)
+        this.waitingIO = false;                         // current I/O is waiting for the device
     }
 
 
@@ -101,32 +143,42 @@ class Processor {
     *******************************************************************/
 
     /**************************************/
-    traceRegisters(prefix) {
-        /* Formats the registers to console.log */
-        let loc = this.disk.L.value;
+    traceHeading() {
+        /* Prints a column heading for trace output */
 
-        console.log("%s: L=%s: ID=%s %s  MQ=%s %s  PN=%s %s  PN%s  IP=%d  AR=%s : FO=%d%s",
-                (prefix ?? "REG").padStart(16, " "),
-                Util.formatLineLoc(24, loc, false),
-                Util.lgp21Hex(this.disk.ID[1].value).padStart(8, "0"),
-                Util.lgp21SignedHex(this.disk.ID[0].value),
-                Util.lgp21Hex(this.disk.MQ[1].value).padStart(8, "0"),
-                Util.lgp21SignedHex(this.disk.MQ[0].value),
-                Util.lgp21Hex(this.disk.PN[1].value).padStart(8, "0"),
-                Util.lgp21SignedHex(this.disk.PN[0].value),
-                (this.pnSign ? "-" : "+"), this.IP.value,
-                Util.lgp21SignedHex(this.disk.AR.value),
-                this.FO.value, (this.overflowed ? "*" : " "));
+        console.log("Phase  Desc   WordTime   ΔWT  Sector Addr  TTSS  R reg    Mnemonic  Accumulator/Operand  Indicators");
     }
 
     /**************************************/
-    traceState() {
-        /* Log current processor state to the console using a PPR-like format */
-        const diskLoc = this.isNCAR ?
-                "NCAR   " : Util.formatDiskLoc(this.cmdLine, this.cmdLoc.value, true);
+    tracePrefix(phase, caption) {
+        /* Generates and returns a standard prefix for trace output */
+        const d = this.disk;
 
-        console.log(`<TRACE${this.devices.paperTapeReader.blockNr.toString().padStart(3, " ")}>` +
-                    `${this.lastRCWordTime.toFixed().padStart(9)}: ${diskLoc}  ${Util.disassembleCommand(this.cmdWord)}`);
+        return `<P${phase}> ${caption.substring(0, 8).padEnd(8)} ` +
+                (d.diskTime%100000000).toString().padStart(8) +
+                `${Math.min(d.diskTime-this.lastOpDiskTime, 9999).toString().padStart(5)}\u0394 ` +     // 0394=Delta
+                `${d.track.value.toString().padStart(3)}:${d.L.value.toString().padStart(3)}`;
+    }
+
+    /**************************************/
+    traceInstruction(phase, caption) {
+        /* Log current processor state to the console using a PIR-like format */
+
+        console.log(`${this.tracePrefix(phase, caption)}(${this.opAddr.toString().padStart(4)}) ` +
+                `${Util.lgp21DecAddress(this.opAddr)}: ` +
+                `${Util.lgp21Hex(this.opWord)} ${Util.lgp21FormatOp(this.opWord)}` +
+                `  ${(this.A.value >> 1).toString().padStart(11)} ${Util.lgp21Hex(this.A.value)}  ` +
+                `OF${this.C.getOverflow() ? "+":"-"} ` +
+                `Q1${this.Q.Q1 ? "+":"-"} Q2${this.Q.Q2 ? "+":"-"}`);
+    }
+
+    /**************************************/
+    traceOperand(phase, caption, addr, word) {
+        /* Traces the fetching of operand values */
+
+        console.log(`${this.tracePrefix(phase, caption)}(${addr.toString().padStart(4)}) ` +
+                `${Util.lgp21DecAddress(addr)}: ` +
+                `${(word >> 1).toString().padStart(29)} ${Util.lgp21Hex(word)}`);
     }
 
     /**************************************/
@@ -150,128 +202,21 @@ class Processor {
         this.F.updateLampGlow(gamma);
         this.G.updateLampGlow(gamma);
         this.H.updateLampGlow(gamma);
+        this.K.updateLampGlow(gamma);
+        this.X.updateLampGlow(gamma);
 
         // Processor Registers
         this.C.updateLampGlow(gamma);
-        this.I.updateLampGlow(gamma);
-        this.A .updateLampGlow(gamma);
+        this.R.updateLampGlow(gamma);
+        this.A.updateLampGlow(gamma);
+        this.AStarLow.updateLampGlow(gamma);
+        this.AStarHigh.updateLampGlow(gamma);
+        this.P.updateLampGlow(gamma);
+        this.Q.updateLampGlow(gamma);
 
         // Disk Registers
         this.disk.L.updateLampGlow(gamma);
-    }
-
-
-    /*******************************************************************
-    *  Input/Output Subsystem                                          *
-    *******************************************************************/
-
-    /**************************************/
-    async receiveInputCode(code) {
-        /* Receives the next I/O code from an input device and either stores
-        it onto the drum or acts on its control function */
-        const autoReload = this.AS.value && (this.OC.value & 0b1100) == 0b1100; // SLOW IN only
-        let eob = 0;                    // end-of-block flag
-        let marker = 0;                 // auto-reload marker code
-
-        if ((this.OC.value & 0b01100) != 0b01100) {
-            eob = 1;                            // canceled or not SLOW IN
-        } else {
-            if (code & IOCodes.ioDataMask) {    // it's a data frame
-                await this.disk.ioStart("RIC data");
-                marker = await this.disk.ioPrecessCodeTo23(code, 4);
-                this.disk.ioStop("RIC data");
-            } else {
-                switch(code & 0b00111) {
-                case IOCodes.ioCodeMinus:       // minus: set sign FF
-                    this.OS.value = 1;
-                    break;
-                case IOCodes.ioCodeCR:          // carriage return: shift sign into word
-                case IOCodes.ioCodeTab:         // tab: shift sign into word
-                    await this.disk.ioStart("RIC CR/TAB");
-                    marker = await this.disk.ioPrecessCodeTo23(this.OS.value, 1);
-                    this.disk.ioStop("RIC CR/TAB");
-                    this.OS.value = 0;
-                    break;
-                case IOCodes.ioCodeStop:        // end/stop
-                    eob = 1;
-                    // no break: Stop implies Reload -- if not TYPE IN -- see receiveKeyboardCode()
-                case IOCodes.ioCodeReload:      // reload
-                    if (!autoReload) {
-                        await this.ioPrecession;
-                        await this.disk.ioStart("RIC Stop/Reload");
-                        await this.disk.ioCopy23ToMZ(false);
-                        this.disk.ioStop("RIC Stop/Reload");
-                        this.ioPrecession = this.disk.ioPrecessMZTo19();    // uses separate drum timing
-                    }
-                    break;
-                case IOCodes.ioCodePeriod:      // period: ignored
-                    break;
-                case IOCodes.ioCodeWait:        // wait: insert a 0 digit on input
-                    await this.disk.ioStart("RIC Period/Wait");
-                    marker = await this.disk.ioPrecessCodeTo23(0, 4);
-                    this.disk.ioStop("RIC Period/Wait");
-                    break;
-                default:                        // treat everything else as space & ignore
-                    break;
-                }
-            }
-
-            // Check if automatic reload is enabled and line 23 is full
-            if (autoReload && marker == 1) {
-                marker = 0;
-                await this.ioPrecession;
-                await this.disk.ioStart("RIC AUTO Reload");
-                await this.disk.ioCopy23ToMZ(true);
-                this.disk.ioStop("RIC AUTO Reload");
-                this.ioPrecession = this.disk.ioPrecessMZTo19();            // uses separate drum timing
-            }
-        }
-
-        if (eob) {
-            await this.ioPrecession;            // wait for final line 19 precession to complete
-        }
-
-        return eob;
-    }
-
-    /**************************************/
-    async executeKeyboardCommand(code) {
-        /* Executes the typewriter keyboard command specified by:
-            * If the code is negative, then the ASCII value of "code"
-            * If the code is 0b10000-0b10111 (keyboard 1-7), then sets
-              the command line to the value of that code
-        Returns 0 if the command is accepted and 0 if rejected */
-        let result = 0;                 // assume valid input for now
-
-        return result;
-    }
-
-    /**************************************/
-    async receiveKeyboardCode(code) {
-        /* Processes a keyboard code sent from Typewriter. Codes are ignored
-        if the system has not yet been reset. If the code is negative, it is
-        the ASCII code for a control command used with the ENABLE switch.
-        Otherwise it is an I/O data/control code to be processed as TYPE IN
-        (D=31, S=12) input. Note that the "S" key can be used for both purposes
-        depending on the state of this.enableSwitch. Returns 0 if the input is
-        accepted and ` if rejected or it's a STOP. If the ENABLE switch is not
-        on and TYPE IN is not active, the keystroke is ignored and 1 is returned */
-        let result = 1;                 // assume it's going to be rejected
-
-        if (!this.poweredOn) {                                  // ignore the keyboard if powered off
-            result = 1;
-        } else if (this.enableSwitch) {                         // Control command
-            result = await this.executeKeyboardCommand(code);
-        } else if (this.OC.value == IOCodes.ioCmdTypeIn) {      // Input during TYPE IN
-            if (code == IOCodes.ioCodeStop) {                   // check for cancel
-                this.finishIO();                                // no reload with STOP from Typewriter
-                result = 1;                                     // accept the keystroke as a STOP
-            } else if (code > 0) {
-                result = await this.receiveInputCode(code);
-            }
-        }
-
-        return result;
+        this.disk.track.updateLampGlow(gamma);
     }
 
 
@@ -290,136 +235,618 @@ class Processor {
         // First, shift the two operands right one bit with zero fill to
         // eliminate the spacer bit and avoid JavaScript bitwise conversion
         // between twos-complement and Number (IEEE 754) representations.
-        const a = augend >>> 1;
+        const a = augend >>> 1;         // remove the spacer bits
         const b = addend >>> 1;
         let sum = a + b;
-        if (!((augend ^ addend) & Util.wordSignMask)) {
-            // Signs are the same, so check if sum sign is same as augend.
-            this.overflowed = (a ^ b) >>> (Util.wordBits-2);
+        if (((augend ^ addend) & Util.wordSignMask)) {
+            // Signs are different -- no overflow is possible.
+            this.overflowed = 0;
+        } else {
+            // Signs are the same -- sum sign != augend sign => overflow.
+            this.overflowed = (a ^ sum) >>> (Util.wordBits-2);
         }
 
-        return sum << 1;                // reinstate the spacer bit.
+        return sum << 1;                // reinstate the sum's spacer bit
     }
 
     /**************************************/
     subtractWord(minuend, subtrahend) {
         /* Subtracts two words in LGP-21 format, returning the difference.
         Reverses the sign of subtrahend and then calls addWord() to generate
-        the difference and overflow check */
+        the difference and overflow check. More bit fiddling to avoid twos-
+        complement vs Number issues */
         const negated = Util.wordSignMask - (subtrahend >>> 1);
 
         return this.addWord(minuend, negated << 1);
     }
 
+    /**************************************/
+    selectIODevice(deviceCode) {
+        /* Sets the I/O device from the track bits in R. If the device code is
+        not valid, sets the device to null, which is needed by INPUT=4 to perform
+        just a 4/6-bit left shift. This routine is normally called from Phase 3,
+        using the track number from the instruction in the upper 5 bits of P */
+
+        // *** NOTE: The Tally reader and punch are temporarily redirected to the Flexowriter.
+
+        switch (deviceCode & 0b111110) {
+        case Processor.devTallyReader:  // Tally 141 tape reader
+            // no-break;                        // not implemented yet...
+        case Processor.devTallyPunch:   // Tally 151 tape punch
+            // no-break;                        // not implemented yet...
+        case Processor.devFlexowriter:  // Flexowriter 121 typewriter/reader/punch
+            this.activeIODevice = this.context.devices.flexowriter;
+            break;
+        default:        // invalid device
+            this.activeIODevice = null;
+            break;
+        }
+    }
+
+    /**************************************/
+    terminateIO() {
+        /* Terminates any currently-active I/O operation */
+
+        if (this.activeIODevice) {
+            this.waitingIO = false;
+            this.X.value = 1;       // signal end-of-IO
+            this.activeIODevice = null;
+        }
+    }
+
+    /**************************************/
+    async receiveInputCode(code) {
+        /* Receives the next I/O code from an input device and loads it into
+        the P register. There is special handling for mode ManInput:
+          - For normal input, if the code a COND STOP or negative code
+            (indicating I/O was canceled), terminates the I/O by setting the
+            activeIODevice to null; if the code is one that does not enter the
+            A register, ignores it; otherwise resets the waitingIO flag to allow
+            Phase 1 to finish and Phase 4 to shift the (rotated) code into the
+            A register.
+          - For Manual Input, the same filtering of input codes takes place,
+            but there is no I/O operation to terminate, and the first 4 bits of
+            P are unconditionally shifted left into the A register */
+
+        if (this.modeSwitch == Processor.modeManInput ||
+                // Ignore if not active I/O, not waiting for a code, or not input.
+                (this.activeIODevice && this.waitingIO && !this.X.value)) {
+            if (code == IOCodes.ioCondStop || code < 0) { // read stopped
+                if (this.modeSwitch == Processor.modeManInput) {
+                    this.activeIODevice.enableSend(false); // reassert Flexowriter send mode
+                } else {
+                    this.terminateIO();
+                }
+            } else if (code == IOCodes.ioDelete) {
+                // Ignore Delete (rubout) codes
+            } else if ((code & 0b100001) == 0 && this.K.value) {
+                // Ignore 0xxxx0 codes in 4-bit mode.
+            } else {
+               // Load P by rotating the tape code to internal format, then signal I/O ready.
+               this.P.value = ((code & 0b011111) << 1) | ((code & 0b100000 >>> 5));
+               if (this.modeSwitch == Processor.modeManInput) {
+                   this.A.value = ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2);
+               } else {
+                   this.waitingIO = false;              // input is read for shifting in P4
+               }
+            }
+        }
+    }
 
     /**************************************/
     senseHalt() {
         /* Executes the Z instruction, conditionally halting the processor,
         clearing overflow and skipping the next instruction, sensing the
         breakpoint switches and skipping the next instruction, or a combination
-        of those actions */
-        const track = (this.I.value & Util.trackMask) >>> Util.trackShift;
+        of those actions. If both halt and skip conditions are met, halt occurs
+        first */
+        const track = this.P.value & 0b111110;
 
-        if (this.C.getOverflow()) {
-            this.C.setOverflow(0);
-            this.skipInstruction = true;
+        if (this.R.value & Util.wordSignMask) { // negative instruction
+            if (this.C.getOverflow()) {
+                this.C.setOverflow(0);          // reset overflow, don't skip
+            } else {
+                this.Q.Q1 = 1;                  // set skip indicator
+            }
         }
 
-        if (track == 0) {
-            this.stop();                // stop occurs before skip
-        } else {
+        switch (track) {
+        case 0:
+        case 1:
+            this.stop();                        // redundant: also handled in P4
+            break;
+        case 2:
+        case 3:
+            // Treated as a no-op.
+            break;
+        default:
             const offSwitchMask = (this.bs4Switch  ? 0 : 0x04) +
                                   (this.bs8Switch  ? 0 : 0x08) +
                                   (this.bs16Switch ? 0 : 0x10) +
                                   (this.bs32Switch ? 0 : 0x20);
-            if (track & offSwitchMask) {
-                this.skipInstruction = true;
+            if (track & offSwitchMask) {        // if any masked switches are off
+                this.Q.Q1 = 1;                  // set skip indicator
             }
         }
     }
 
     /**************************************/
-    async execute() {
-        /* Executes the command currently loaded into the C register as
-        this.order */
+    multiplyStep(forLow) {
+        /* Multiplies A by the operand word, generating a 62-bit result.
+        If "forLow" is true, returns the 31 low-order bits of the result in A,
+        otherwise the 30 high-order bits. THIS IS A TEMPORARY SHIM UNTIL A
+        CORRECT ALGORITHM IS IMPLEMENTED */
+
+        /*****************************
+        const multiplicand = this.A.value;
+        let pSign = (multiplicand & Util.signBitMask) ^ (multiplier & Util.signBitMask);
+        let m1 = Math.abs(multiplicand);        // 31-bit abs value
+        let m2 = Math.abs(multiplier);          // 31-bit abs value
+        let p = m1*m2;                          // yields a 62-bit product
+
+        // First, move the scaling point of the product 32 bits left giving a 30-bit integer part.
+        let first30bits = p/(Util.wordSignMask << 1);
+
+        // Now return the high or low part as required.
+        if (forLow) {
+            // Discard the integer part, shift scaling point 31 bits right,
+            // extract the resulting integer part, and shift in the spacer bit.
+            p = Math.floor((p%1)*Util.wordSignMask) << 1;
+        } else {
+            // Extract the high-order 30-bit integer part and shift in the spacer bit.
+            p = Math.floor(p) << 1;
+        }
+
+        // Finally, apply the product sign and store in A.
+        this.A.value = pSign ? -p : p;
+        *****************************/
+
+        let nextPhase = 4;              // continue in phase 4 until dummy timing completes
+
+        if (this.H.value) {
+            if (this.P.value < 63) {
+                this.P.inc();           // increment the dummy cycle counter
+            } else {
+                const two32 =         0x100000000n;
+                const two64 = 0x10000000000000000n;
+                let multiplicand = this.A.value | 0;
+                let multiplier = this.dataWord | 0;
+                let pSign = 0;
+                if (multiplicand < 0) {
+                    pSign ^= 1;
+                    multiplicand = -multiplicand;
+                }
+
+                if (multiplier < 0) {
+                    pSign ^= 1;
+                    multiplier = -multiplier;
+                }
+
+                let p = BigInt(multiplicand) * BigInt(multiplier) / 2n;
+                if (pSign) {
+                    p = two64 - p;
+                }
+
+                if (forLow) {
+                    this.A.value = Number(p % two32) >>> 0;
+                } else {
+                    this.A.value = (Number(p/two32) << 1) >>> 0;
+                }
+
+                nextPhase = 1;
+                this.H.value = 0;
+                if (this.modeSwitch != Processor.modeNormal) {
+                    this.stop();
+                }
+            }
+        } else {
+            const dataAddr = (this.opWord & Util.addressMask) >>> Util.sectorShift; // for tracing
+            this.dataWord = this.disk.read();
+            if (this.tracing) {
+                this.traceOperand(4, "Operand", dataAddr, this.dataWord);
+            }
+
+            this.R.value = this.dataWord;
+            this.H.value = 1;           // set H to enable dummy timing cycles
+            this.P.value = 0;           // use P to count the dummy cycles
+        }
+
+        return nextPhase;
+    }
+
+    /**************************************/
+    divideStep() {
+        /* Divides A by the operand word, generating a 62-bit result, returning
+        the high-order bits of the result in A. THIS IS A TEMPORARY SHIM UNTIL
+        A CORRECT ALGORITHM IS IMPLEMENTED */
+
+        /*******************************
+        let num = this.A.value;
+        let denom = this.disk.read();
+        let qSign = (num & Util.signBitMask) ^ (denom & Util.signBitMask);
+        let d1 = Math.abs(num & Util.wordMask);
+        let d2 = Math.abs(denom & Util.wordMask);
+
+        let q = d1/d2;
+        if (q >= 1) {
+            this.C.setOverflow(1);
+            q = q%1;                    // extract the fractional part
+        }
+
+        // Shift the scaling point 30 bits right, extract the integer part,
+        // shift in the space bit, and apply the sign.
+        q = Math.round(q*(Util.wordSignMask >>> 1)) << 1;
+        this.A.value = qSign ? -q : q;
+        *********************************/
+
+        let nextPhase = 4;              // continue in phase 4 until dummy timing completes
+
+        if (this.H.value) {
+            if (this.P.value < 63) {
+                this.P.inc();           // increment the dummy cycle counter
+            } else {
+                const two32 =         0x100000000n;
+                const two64 = 0x10000000000000000n;
+                const dividend = this.A.value | 0;
+                const divisor = this.dataWord | 0;
+                let qSign = 0;
+                if (dividend < 0) {
+                    qSign ^= 1;
+                    dividend = -dividend;
+                }
+
+                if (divisor < 0) {
+                    qSign ^= 1;
+                    divisor = -divisor;
+                }
+
+                let q = (BigInt(dividend)*two32) / BigInt(divisor) /2n;
+                if (dividend >= divisor) {
+                    this.C.setOverflow(1);
+                    q = q % two32;
+                }
+
+                if (qSign) {
+                    q = two32 - q;
+                }
+
+                this.A.value = Number(q) >>> 0;
+
+                nextPhase = 1;
+                this.H.value = 0;
+                if (this.modeSwitch != Processor.modeNormal) {
+                    this.stop();
+                }
+            }
+        } else {
+            const dataAddr = (this.opWord & Util.addressMask) >>> Util.sectorShift; // for tracing
+            this.dataWord = this.disk.read();
+            if (this.tracing) {
+                this.traceOperand(4, "Operand", dataAddr, this.dataWord);
+            }
+
+            this.H.value = 1;           // set H to enable dummy timing cycles
+            this.P.value = 0;           // use P to count the dummy cycles
+        }
+
+        return nextPhase;
+    }
+
+
+    /*******************************************************************
+    *  Processor Phase & Execution Management                          *
+    *******************************************************************/
+
+    /**************************************/
+    async phase1() {
+        /* Most commonly used to search for the next instruction word on the
+        disk as specfied by the track and sector portion of the C register.
+        Also used by I/O to delay until input is received or an output device
+        is ready */
+        let nextPhase = 1;              // stay in this phase by default
+
+        switch (true) {
+        case this.activeIODevice !== null && this.Q.Q3 == 0:    // active input I/O
+            if (!this.waitingIO) {
+                nextPhase = 3;          // input code received into P
+            }
+            break;
+
+        case this.activeIODevice !== null && this.Q.Q3 != 0:    // active output I/O
+            // If output is 4-bit mode, apply correct zone bits to the internal code.
+            if (this.K.value) {
+                this.P.value = (this.P.value & 0b111100) | 0b000010;
+            }
+
+            // Rotate the internal code in P to tape code format. Send P to the
+            // output device to see if it's busy -- if not, repeat Phase 1.
+            // If accepted, terminate I/O but stay in P1 to start next instruction.
+            {
+                const tp = (this.P.value >>> 1) | ((this.P.value & 1) << 5);
+                if (this.activeIODevice.write(tp) >= 0) {       // < 0 => busy
+                    this.terminateIO();
+                }
+
+                /********** DEBUG PRINT **********  /
+                console.debug(`<P1> Print: P=${this.P.value.toString(2).padStart(6,'0')}` +
+                              `, K=${this.K.value}, code=${tp.toString(2).padStart(6,'0')}` +
+                              ` '${IOCodes.ioTapeCodeToASCII[tp]}'`);
+                /*********************************/
+            }
+            break;
+
+        default:                        // Search for instruction sector
+            if (!this.lastOpEnded) {
+                if (this.tracing) {             // log end of prior instruction
+                    this.traceInstruction(1, "End Op");
+                }
+
+                this.lastOpEnded = true;        // prevent end-op processing during rest of search
+                this.lastOpDiskTime = this.disk.diskTime;
+            }
+
+            this.K.value = 1;           // initialize sector-found flag
+            if (!this.Q.Q2) {
+                this.blocked = true;    // enter blocked mode, stop emulation
+                nextPhase = 0;                  // invalidate next phase
+            } else {
+                if (this.disk.findSector(this.C.value)) {
+                    nextPhase = 2;      // instruction sector found
+                } else {
+                    this.K.value = 0;   // instruction sector not found (yet)
+                }
+            }
+            break;
+        }
+
+        await this.disk.stepDisk();
+        return nextPhase;
+    }
+
+    /**************************************/
+    async phase2() {
+        /* Used to load the word at the current disk location to the R register
+        in preparation for execution. Also handles conditional skipping by
+        switching back to Phase 1 instead of 3 */
+        let nextPhase = 3;
+        const word = this.disk.read();
+
+        this.opAddr = (this.C.value & Util.addressMask) >>> Util.sectorShift;   // for tracing
+        this.opWord = word;                                                     //   "
+        this.lastOpEnded = false;   // reset for this instruction cycle         //   "
+
+        this.R.value = word;
+        this.C.incAddress();            // increment instruction counter
+
+        // Load P with the track field plus the high-order bit of the sector
+        // field (a holdover from the LGP-30 6-bit track and 6-bit sector fields).
+        this.P.value = (word & Util.addressMask) >>> (Util.trackShift-1);
+        this.G.value = 0;               // for display only
+        this.K.value = 1;               //  "
+        this.Q.Q2 = 0;                  //  "
+        if (this.Q.Q1) {                // check if we're skipping this instruction
+            this.Q.Q1 = 0;              // yes, reset skip indicator
+            nextPhase = 1;
+        }
+
+        await this.disk.stepDisk();
+        return nextPhase;
+    }
+
+    /**************************************/
+    async phase3() {
+        /* Most commonly used to search for the current instruction's operand
+        location as specified by the track and sector portion of the R register
+        and load the order code into the Q register.
+        Also used by I/O for various purposes */
+        let nextPhase = 3;              // stay in this phase by default
+
+        this.order = (this.R.value & Util.orderMask) >>> Util.orderShift;
+        this.Q.value = this.order;
 
         switch (this.order) {
-        case 0:                         // Z: Sense/Halt
+        case Processor.opSenseHalt:     // Z=SENSE/HALT
+        case Processor.opTransfer:      // U=UNCONDITIONAL TRANSFER
+            nextPhase = 4;              // P3 is 1 word-time only
+            break;
+
+        case Processor.opTest:          // T=TEST
+            if ((this.A.value & Util.wordSignMask) ||
+                    (this.tcSwitch && (this.R.value & Util.wordSignMask))) {
+                this.Q.Q4 = 0;          // convert op to Unconditional Transfer
+                this.order &= 0b1110;
+            }
+            nextPhase = 4;
+            break;
+
+        case Processor.opInput:         // I=INPUT and SHIFT
+            if (this.activeIODevice) {  // => Faf, not first P3
+                this.waitingIO = true;
+            } else {                    // initial P3
+                this.selectIODevice(this.P.value);
+                this.K.value = this.R.value & Util.wordSignMask;        // 4/6-bit mode
+                this.X.value = 0;       // reset end-input flag (was really set in the next P1)
+                this.P.value = 0;       // reset P in preparation for P4 shift into A
+                if (this.activeIODevice) { // make sure this isn't just a Shift
+                    this.activeIODevice.enableSend(true);               // start input
+                    this.waitingIO = true;
+                }
+            }
+
+            nextPhase = 4;              // P3 is 1 word-time only
+            break;
+
+        case Processor.opPrint:         // P=PRINT
+            this.selectIODevice(this.P.value);
+            this.K.value = this.R.value & Util.wordSignMask;            // 4/6-bit mode
+            this.X.value = 0;           // reset end-output flag
+            nextPhase = 4;              // P3 is 1 word-time only
+            break;
+
+        default:                        // Search for operand sector
+            this.K.value = 1;           // initialize sector-found flag
+            if (this.disk.findSector(this.R.value)) {
+                nextPhase = 4;
+            } else {
+                this.K.value = 0;       // operand sector not found (yet)
+            }
+            break;
+        }
+
+        await this.disk.stepDisk();
+        return nextPhase;
+    }
+
+    /**************************************/
+    async phase4() {
+        /* Primary phase for executing the instruction in the the C register as
+        loaded into this.order. It is primarily concerned with modifying the A
+        register, and usually terminates in one word-time, but some instructions
+        (I/O, multiply, divide) will execute across multiple phase cycles and
+        visit this and other phases more than once. Returns the next phase to
+        be executed */
+        const dataAddr = (this.opWord & Util.addressMask) >>> Util.sectorShift; // for tracing
+        let nextPhase = 1;
+
+        switch (this.order) {
+        case Processor.opSenseHalt:     // Z: Sense/Halt
             this.senseHalt();
             break;
 
-        case 1:                         // B: Bring (load A)
-            this.A.value = await this.disk.read();
-            break;
-
-        case 2:                         // Y: Store Address
-            await this.disk.modify((word) => {
-                return (word & Util.addressMask) | (this.A.value & Util.addressMask);
-            });
-            break;
-
-        case 3:                         // R: Set Return Address
-            await this.disk.modify((word) => {
-                return (word & Util.addressMask) |
-                        (((this.C.value & Util.addressMask) + 1) & Util.addressMask);
-            });
-            break;
-
-        case 4:                         // I: Input/Left Shift (4 or 6 bit)
-            break;
-
-        case 5:                         // D: Divide
-            break;
-
-        case 6:                         // N: Multiply for low-order bits
-            break;
-
-        case 7:                         // M: Multiple for high-order bits
-            break;
-
-        case 8:                         // P: Print/Output/No-Op (4 or 6 bit)
-            break;
-
-        case 9:                         // E: Extract (logical AND)
-            this.A.value &= await this.disk.read();
-            break;
-
-        case 10:                        // U: Unconditional Transfer
-            this.C.value = this.I.value;
-            await this.disk.stepDisk();
-            break;
-
-        case 11:                        // T: Test or Conditional Transfer
-            if ((this.A.value & Util.wordSignMask) ||
-                    (this.tcSwitch && (this.I.value & Util.wordSignMask))) {
-                this.C.value = this.I.value;
+        case Processor.opBring:         // B: Bring (load A)
+            this.dataWord = this.disk.read();
+            this.A.value = this.dataWord;
+            if (this.tracing) {
+                this.traceOperand(4, "Operand", dataAddr, this.dataWord);
             }
-            await this.disk.stepDisk();
             break;
 
-        case 12:                        // H: Hold (store and retain A)
-            await this.disk.write(this.A.value);
+        case Processor.opStoreAddress:  // Y: Store Address
+            this.disk.modify((word) => {
+                const result = (word & ~Util.addressMask) | (this.A.value & Util.addressMask);
+                this.dataWord = word;
+                if (this.tracing) {
+                    this.traceOperand(4, "Y Result", dataAddr, result);
+                }
+                return result;
+            });
             break;
 
-        case 13:                        // C: Clear (store and clear A)
-            await this.disk.write(this.A.value);
+        case Processor.opStoreReturn:   // R: Set Return Address
+            this.disk.modify((word) => {
+                const result = (word & ~Util.addressMask) |
+                        (((this.C.value & Util.addressMask) + (1 << Util.sectorShift)) & Util.addressMask);
+                this.dataWord = word;
+                if (this.tracing) {
+                    this.traceOperand(4, "R Result", dataAddr, result);
+                }
+                return result;
+            });
+            break;
+
+        case Processor.opInput:         // I: Input & Left Shift (4 or 6 bit)
+            this.A.value = this.K.value ? ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2)
+                                        : ((this.A.value << 6) & Util.fullWordMask) | (this.P.value);
+            break;
+
+        case Processor.opDivide:        // D: Divide
+            nextPhase = this.divideStep();
+            break;
+
+        case Processor.opMultiplyLow:   // N: Multiply for low-order bits
+            nextPhase = this.multiplyStep(true);
+            break;
+
+        case Processor.opMultiply:      // M: Multiple for high-order bits
+            nextPhase = this.multiplyStep(false);
+            break;
+
+        case Processor.opPrint:         // P: Print/Output/No-Op (4 or 6 bit)
+            this.P.value = (this.A.value >>> 26) & 0b111111;
+            this.Q.Q2 = 1;              // Do not block in next P1
+            this.Q.Q3 = 1;              // Indicate output order (used by P1 since Q is altered)
+
+            /********** DEBUG PRINT **********  /
+            console.debug(`<P4> Print: A=${Util.lgp21Hex(this.A.value)}` +
+                          `=${(this.A.value>>>0).toString(2).padStart(32,'0')}` +
+                          `, P=${this.P.value.toString(2).padStart(6,'0')}`);
+            /*********************************/
+            break;
+
+        case Processor.opExtract:       // E: Extract (logical AND)
+            this.dataWord = this.disk.read();
+            this.A.value &= this.dataWord;
+            if (this.tracing) {
+                this.traceOperand(4, "Operand", dataAddr, this.dataWord);
+            }
+            break;
+
+        case Processor.opTransfer:      // U: Unconditional Transfer
+            this.C.value = (this.C.value & ~Util.addressMask) |
+                           (this.R.value & Util.addressMask);
+            break;
+
+        case Processor.opTest:          // T: Test or Conditional Transfer
+            // Handled in P3 -- changes order to a Transfer if test succeeds.
+            break;
+
+        case Processor.opStoreHold:     // H: Hold (store and retain A)
+            if (this.tracing) {
+                this.traceOperand(4, "Store H", dataAddr, this.A.value);
+            }
+
+            this.disk.write(this.A.value);
+            break;
+
+        case Processor.opStoreClear:    // C: Clear (store and clear A)
+            if (this.tracing) {
+                this.traceOperand(4, "Store C", dataAddr, this.A.value);
+            }
+            this.disk.write(this.A.value);
             this.A.value = 0;
             break;
 
-        case 14:                        // A: Add
-            this.A.value = this.addWord(this.A.value, await this.disk.read());
+        case Processor.opAdd:           // A: Add
+            this.dataWord = this.disk.read();
+            if (this.tracing) {
+                this.traceOperand(4, "Operand", dataAddr, this.dataWord);
+            }
+
+            this.A.value = this.addWord(this.A.value, this.dataWord);
             if (this.overflowed) {
                 this.C.setOverflow(1);
             }
             break;
 
-        case 15:                        // S: Subtract
-            this.A.value = this.subtractWord(this.A.value, await this.disk.read());
+        case Processor.opSubtract:      // S: Subtract
+            this.dataWord = this.disk.read();
+            if (this.tracing) {
+                this.traceOperand(4, "Operand", dataAddr, this.dataWord);
+            }
+
+            this.A.value = this.subtractWord(this.A.value, this.dataWord);
             if (this.overflowed) {
                 this.C.setOverflow(1);
             }
             break;
         }
+
+        // Check for blocked state at end of instruction (see MTM, p.3-25, 3-54).
+        if (this.stopRequested) {
+            // If (Q1 is set [op P,E,U,T,H,C,A,S] or op is Input, enter blocked state.
+            if (this.Q.Q1 || this.Q.value == Processor.opInput) {
+                this.Q.Q2 = 0;
+            }
+        } else {
+            // If Q2 is reset [op Z 00,B,Y,R,P,E,U,T], set Q2 to prevent blocked state.
+            if (!this.Q.Q2 && (this.Q.value != 0 || this.P.value != 0)) {
+                this.Q.Q2 = 1;
+            }
+        }
+
+        this.Q.Q1 = 0;                  // unconditionally reset skip indicator
+        await this.disk.stepDisk();
+        return nextPhase;
     }
 
 
@@ -432,114 +859,105 @@ class Processor {
         /* Sets the instruction phase flip-flops (F, G, H) according to "phase" */
 
         switch (phase) {
-        case Processor.searchInstruction:
-            this.F.set(0);
-            this.G.set(0);
-            this.H.set(0);
+        case 1:
+            this.F.value = 0;
+            this.G.value = 0;
             break;
-        case Processor.loadInstruction:
-            this.F.set(0);
-            this.G.set(1);
+        case 2:
+            this.F.value = 0;
+            this.G.value = 1;
             break;
-        case Processor.searchOperand:
-            this.F.set(1);
-            this.G.set(0);
+        case 3:
+            this.F.value = 1;
+            this.G.value = 0;
             break;
-        case Processor.executionInstruction:
-            this.F.set(1);
-            this.G.set(1);
+        case 4:
+            this.F.value = 1;
+            this.G.value = 1;
             break;
         }
     }
 
     /**************************************/
-    async run(startPhase=Processor.searchInstruction) {
+    async run(startPhase) {
         /* Main execution control loop for the processor. The disk manages the
         system timing, updating its L and eTime properties as calls on its
-        seek() and stepDisk() methods are made. The disk also throttles
-        performance to approximately that of a real LGP-21. We continue to run
-        until a halt or blocked condition is detected */
-        let nextPhase = startPhase;
-        let phase = 0;                  // current instruction phase
-        let word = 0;                   // current disk word
+        stepDisk() method is made. The disk also throttles performance to
+        approximately that of a real LGP-21. We continue to run until a halt or
+        blocked condition is detected, which is indicated by this.blocked was
+        set true by Phase 1. Exiting this routine stops the emulation */
+        let phase = startPhase;         // current instruction phase
 
         this.disk.startTiming();
-        setPhaseFF(nextPhase);
+        this.setPhaseFF(phase);
+        this.blocked = false;
+        if (this.tracing) {
+            console.log(`<Start Emulation> Phase=${phase}, Mode=${this.modeSwitch}`);
+        }
 
         do {                            // run until blocked
-            phase = nextPhase;
             switch (phase) {
-            case Processor.searchInstruction:           // Phase 1
-                nextPhase = Processor.loadInstruction;
-                this.Q2.set(0);
-                await this.disk.seek(this.C.value);
+            case 1:                     // Phase 1
+                phase = await this.phase1();
                 break;
 
-            case Processor.loadInstruction:             // Phase 2
-                nextPhase = Processor.searchOperand;
-                this.Q2.set(0);
-                this.I.value = word = await this.disk.read();
-                this.C.incAddress();    // increment instruction counter
-                this.G.set(0);
-                this.P1.set(word & (1 < (Util.trackShift+4)));
-                this.P2.set(word & (1 < (Util.trackShift+3)));
-                this.P3.set(word & (1 < (Util.trackShift+2)));
-                this.P4.set(word & (1 < (Util.trackShift+1)));
-                this.P5.set(word & (1 < (Util.trackShift)));
-                this.P6.set(0);
-
-                if (this.skipInstruction) {
-                    this.skipInstruction = false;
-                    nextPhase = Processor.searchInstruction;
-                }
+            case 2:                     // Phase 2
+                phase = await this.phase2();
                 break;
 
-            case Processor.searchOperand:               // Phase 3
-                nextPhase = Processor.executeInstruction;
-                this.order = (this.I.value & Util.orderMask) >>> Util.orderShift;
-                this.Q1.set(this.order & 0b1000);
-                this.Q2.set(this.order & 0b0100);
-                this.Q3.set(this.order & 0b0010);
-                this.Q4.set(this.order & 0b0001);
-                await this.disk.seek(this.I.value);
+            case 3:                     // Phase 3
+                phase = await this.phase3();
                 break;
 
-            case Processor.executeInstruction:          // Phase 4
-                nextPhase = Processor.searchInstruction;
-                await this.execute();
-                if (this.modeSwitch != Processor.modeNormal) {
-                    nextPhase = Processor.blocked;
-                }
+            case 4:                     // Phase 4
+                phase = await this.phase4();
                 break;
 
-            default:
-                console.log(`Invalid Processor phase: ${this.phase}`);
+            default:                    // Error - should never happen
+                console.log(`Invalid Processor phase: ${phase}`);
                 throw new Error("Invalid Processor phase");
                 break;
             }
 
-            this.setPhaseFF(nextPhase);
-        } while (nextPhase != Processor.blocked);
+            this.setPhaseFF(phase);
+        } while (!this.blocked);
 
+        if (!this.lastOpEnded) {
+            if (this.tracing) {         // log end of prior instruction
+                this.traceInstruction(0, "End Op");
+            }
+
+            this.lastOpEnded = true;        // prevent end-op processing during rest of search
+            this.lastOpDiskTime = this.disk.diskTime;
+        }
+
+        this.stopRequested = false;
         this.disk.stopTiming();
         this.updateLampGlow(1);
+        if (this.tracing) {
+            console.log(`<Stop Emulation>  Mode=${this.modeSwitch}`);
+        }
     }
 
     /**************************************/
     start() {
         /* Initiates the processor on the Javascript thread */
 
-        if (this.poweredOn) {
+        if (this.poweredOn && this.blocked && !this.stopRequested) {
+            this.lastOpEnded = true;
             switch (this.modeSwitch) {
-            case Processor.mode1Operation:      // ONE OPERATION
-                this.blocked = true;
-                this.run();                     // async -- returns immediately
+            case Processor.modeOneOperation:    // ONE OPERATION
+                this.stopRequested = true;              // force a single cycle
+                this.Q.Q2 = 1;                          // inhibit blocked state
+                this.run(1);                            // runs async
                 break;
             case Processor.modeManInput:        // MANUAL INPUT
+                // Cannot start in Man Input mode.
                 break;
             case Processor.modeNormal:          // NORMAL
-                this.blocked = false;
-                this.run();                             // async -- returns immediately
+                this.stopRequested = false;             // allow continuous running
+                this.Q.Q2 = 1;                          // inhibit blocked state
+                this.run(1);                            // runs async
                 break;
             }
         }
@@ -547,79 +965,147 @@ class Processor {
 
     /**************************************/
     stop() {
-        /* Stops running the processor on the Javascript thread */
+        /* Signals the Processor or stop running at end of instruction */
 
         if (this.poweredOn && !this.blocked) {
-            this.blocked = true;
+            this.stopRequested = true;
         }
     }
 
     /**************************************/
     panelFillClear() {
         /* Handles the FILL CLEAR button on the ControlPanel to transfer the
-        instruction in the A register to the I register and clear the C register */
+        instruction in the A register to the R register and clear the C register */
 
-        if (this.poweredOn && this.modeSwitch != Processor.modeNormal) {
-            this.C.value = 0;
-            this.I.value = this.A.value;
+        if (this.poweredOn && this.blocked && this.modeSwitch != Processor.modeNormal) {
+            this.C.value = this.opAddr = 0;
+            this.R.value = this.opWord = this.A.value;
+            if (this.tracing) {
+                console.log("<FILL CLEAR>");
+            }
         }
     }
 
     /**************************************/
     panelExecute() {
         /* Handles the EXECUTE button on the ControlPanel to execute the
-        instruction currently in the I register. this.run() is async, but since
-        we are running out of an event handler, we don't care */
+        instruction currently in the R register, bypassing Phases 1 & 2.
+        this.run() is async, but since we are running out of an event handler,
+        we don't care */
 
-        if (this.poweredOn && this.modeSwitch == Processor.mode1Operation) {
-            this.run(Processor.searchOperand);
+        if (this.poweredOn && this.blocked && this.modeSwitch == Processor.modeOneOperation) {
+            if (this.tracing) {
+                console.log("<EXECUTE>");
+            }
+
+            this.stopRequested = true;  // force a single cycle (redundant here?)
+            this.lastOpEnded = false;
+            this.run(3);                // runs async
         }
     }
 
     /**************************************/
     panelClearIO() {
-        /* Handles the IO button on the ControlPanel to clear any in-process
-        I/O and clear the A register */
+        /* Handles the I/O button on the ControlPanel to clear the A register
+        and terminate any in-process I/O. If we are in ManInput mode and the
+        Flexowriter is selected, leave it selected, but if some other device is
+        selected, terminate it and select the Flexowriter. See modeSwitchChange
+        for the reason why */
 
         if (this.poweredOn) {
-            this.A.value = 0;
-            if (this.modeSwitch != Processor.modeManInput) {
-                // ... reset Flexowriter I/O
+            this.A.value = 0;           // unconditionally clears accumulator
+            if (this.activeIODevice) {
+                if (this.modeSwitch != Processor.modeManInput) {
+                    this.activeIODevice.cancel();
+                    this.terminateIO();
+                    this.Q.Q2 = 0;      // initiate blocking
+                    if (this.tracing) {
+                        console.log("<Cancel I/O>");
+                    }
+                } else if (this.activeIODevice === this.devices.flexowriter) {
+                    // Do not reset Flexowriter I/O when in ManInput mode.
+                } else {
+                    // Flexowriter could not be selected when entering
+                    // ManInput mode, but now it can.
+                    this.selectIODevice(Processor.devFlexowriter);
+                    this.activeIODevice.enableSend(false);      // initiate input
+                    if (this.tracing) {
+                        console.log("<Flexowriter selected for ManInput after Cancel I/O>");
+                    }
+                }
             }
-
-            // ... reset all other I/O
         }
     }
 
     /**************************************/
     modeSwitchChange(state) {
-        /* Reacts to a change in state of the ControlPanel COMPUTE switch */
+        /* Reacts to a change in state of the ControlPanel MODE switch. Note
+        that when switching into ManInput mode, the Flexowriter is selected for
+        input, but no other selected device is deselected. In this emulator,
+        only one device can be selected at a time, so in ManInput mode the
+        Flexowriter cannot be selected if any other device is already selected.
+        That condition can be corrected by pressing the I/O switch, which will
+        deselect any other devices and then select the Flex */
 
-        if (this.modeSwitch != state) {
+        if (this.poweredOn && this.modeSwitch != state) {
+            if (this.modeSwitch == Processor.modeManInput) {
+                // Switching out of ManInput deselects the Flexowriter.
+                if (this.activeIODevice === this.devices.flexowriter) {
+                    this.activeIODevice.cancel();
+                    this.terminateIO();
+                    if (this.tracing) {
+                        console.log("<Flexowriter deselected exiting ManInput");
+                    }
+                }
+            }
+
             this.modeSwitch = state;
             switch (state) {
-            case Processor.mode1Operation:      // ONE OPERATION
-                this.stop();
-                break;
             case Processor.modeManInput:        // MANUAL INPUT
+                this.stop();
+                this.Q.Q1 = 0;  // disallow anything except Input
+                this.Q.Q3 = 0;
+                this.Q.Q4 = 0;
+                this.K.value = 1;
+                if (this.activeIODevice !== this.devices.flexowriter) {
+                    if (this.activeIODevice === null) {
+                        this.selectIODevice(Processor.devFlexowriter);
+                        this.activeIODevice.enableSend();       // initiate input
+                        if (this.tracing) {
+                            console.log("<Flexowriter selected for ManInput>");
+                        }
+                    } else if (this.tracing) {
+                        console.log("<Flexowriter NOT SELECTED for ManInput: other device active>");
+                    }
+                }
+                break;
+            case Processor.modeOneOperation:    // ONE OPERATION
                 this.stop();
                 break;
             case Processor.modeNormal:          // NORMAL
-                this.blocked = false;
                 break;
             }
         }
     }
+
+
+    /*******************************************************************
+    *  System Initialization                                           *
+    *******************************************************************/
 
     /**************************************/
     async powerUp() {
         /* Powers up and initializes the processor */
 
         if (!this.poweredOn) {
-            this.blocked = true;                        // set HALT
+            this.blocked = true;                        // set HALT lamp
+            this.stopRequested = false;
             this.devices = this.context.devices;        // I/O device objects
             await this.disk.restore();                  // restore former disk contents
             this.poweredOn = true;
+            console.log("<System Power Up>");
+
+            this.loadMemory();                        // >>> DEBUG ONLY <<<
         }
     }
 
@@ -627,79 +1113,66 @@ class Processor {
     async powerDown() {
         /* Powers down the processor */
 
-        if (this.tracing) {
+        if (this.poweredOn) {
             console.log("<System Power Off>");
+            this.stop();
+            this.terminateIO();
+            await this.disk.persist();                  // async -- save disk contents
+            this.poweredOn = false;
         }
-
-        this.stop();
-        await this.disk.persist();                      // async -- save disk contents
-        this.poweredOn = false;
     }
 
     /**************************************/
     loadMemory() {
-        /* Loads debugging code into the initial drum memory image. The routine
+        /* Loads debugging code into the initial disk memory image. The routine
         should be enabled in this.powerUp() only temporarily for demo and
         debugging purposes */
 
-        let store = (lineNr, loc, word) => {
-            if (lineNr < 20) {
-                this.disk.line[lineNr][loc % Util.longLineSize] = word;
-            } else if (lineNr < 24) {
-                this.disk.line[lineNr][loc % Util.fastLineSize] = word;
-            } else if (lineNr < 27) {
-                this.disk.line[lineNr][loc % 2] = word;
-            }
+        const store = (loc, word) => {
+            const index = (loc & 0xF80) + (((loc & 0x3F)*18) & 0x7F) + ((loc >> 6) & 1);
+            this.disk.diskMem[index] = (word & Util.fullWordMask) >>> 0;
         };
 
-        let asm = (lineNr, loc, di, t, n, ca, s, d, c1=0, bp=0) => {
-            let word = ((((((((((((((di & 1)     << 7) |
-                                    (t  & 0x7F)) << 1) |
-                                    (bp & 1))    << 7) |
-                                    (n  & 0x7F)) << 2) |
-                                    (ca & 3))    << 5) |
-                                    (s  & 0x1F)) << 5) |
-                                    (d  & 0x1F)) << 1) |
-                                    (c1  & 1);
-            store(lineNr, loc, word);
+        const asm = (loc, op, addr, sign=0) => {
+            let word = ((((((sign ? 1 : 0)  << 15) |
+                            (op & 0x0F))    << 14) |
+                            (addr & 0xFFF)) <<  2);
+            store(loc, word);
         };
 
-        let int = (lineNr, loc, word) => {
-            let sign = 0;
-
-            if (word < 0) {
-                sign = 1;
-                word = -word;
-            }
-
-            store(lineNr, loc, ((word & 0xFFFFFFF) << 1) | sign);
+        const int = (loc, value) => {
+            store(loc, value << 1);
         };
 
+        // Preload code in memory...
+        this.disk.diskMem.fill(0);     // clear memory
 
-        // First, fill the drum with non-zero values for testing
-        this.disk.AR.value = 0x1234567;
-        this.disk.ID[0].value = 0x2345678;
-        this.disk.ID[1].value = 0x3456789;
-        this.disk.MQ[0].value = 0x4567890;
-        this.disk.MQ[1].value = 0x5678901;
-        this.disk.PN[0].value = 0x6789012;
-        this.disk.PN[1].value = 0x7890123;
-        this.FO.value = 1;                              // set the overflow FF
-        this.IP.value = 1;                              // set the DP sign FF
-        for (let m=0; m<24; ++m) {
-            for (let loc=Util.longLineSize-1; loc>=0; --loc) {
-                int(m, loc, (m << 16) + loc);
-            }
-        }
+        asm( 0,  1,  116);      // BRING   116
+        asm( 1, 14,  117);      // ADD     117
+        asm( 2, 15,  118);      // SUB     118
+        asm( 3, 13,  201);      // STORE/C 201
+        asm( 4, 14,  119);      // ADD     119
+        asm( 5, 12,  200);      // STORE/H 200
+        asm( 6, 11,   16);      // TEST     16
+        asm( 7,  9,  116);      // EXTRACT 116
+        asm( 8,  0,    0);      // HALT      0
+        asm( 9, 11,    0);      // TEST      0
 
-        // And now for the main event... the infamous 4-word memory clear
-        // routine described by Jim Hornung in his blog (original version).
+        asm(16,  0,    0);      // HALT
 
-        //  M     L  D/I   T    N  C   S   D  C1  BP
-        asm(23,   0,  1,   2,   5, 0, 29, 28);          // ZERO: clear AR (accumulator)
-        asm(23,   1,  0,  12,  15, 2, 23, 23);          // SWAP: precess line 23 via AR starting at L=106 thru L=3 (after first time will be L=3 thru L=3)
-        asm(23,   2,  0,  16,  10, 0, 27, 29);          // CLEAR: smear zeroes to current line
-        asm(23,   3,  0,   6,  10, 0, 26, 31);          // INCR: shift ID/MQ by 3 bits (6 word-times), incrementing AR by 3
+
+        int(116,        123);
+        int(117,        456);
+        int(118,        678);
+        int(119,        -32);
+
+        int(200,         -1);
+
+        // Bootstrap in track 63:00-02. Man Input 000u3w00 (U 6300) to run.
+        store(63*64,   0x80040000);             // Input 4-bit from Flexowriter
+        store(63*64+1, 0x000D3F0C);             // store result at 63:03
+        store(63*64+2, 0x80040000);             // Input again
+
     }
 
 } // class Processor
