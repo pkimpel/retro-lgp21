@@ -235,18 +235,21 @@ class Processor {
         // First, shift the two operands right one bit with zero fill to
         // eliminate the spacer bit and avoid JavaScript bitwise conversion
         // between twos-complement and Number (IEEE 754) representations.
-        const a = augend >>> 1;         // remove the spacer bits
-        const b = addend >>> 1;
+        const a = augend;// >>> 1;         // remove the spacer bits
+        const b = addend;// >>> 1;
         let sum = a + b;
         if (((augend ^ addend) & Util.wordSignMask)) {
             // Signs are different -- no overflow is possible.
             this.overflowed = 0;
         } else {
             // Signs are the same -- sum sign != augend sign => overflow.
-            this.overflowed = (a ^ sum) >>> (Util.wordBits-2);
+            this.overflowed = (a ^ sum) >>> (Util.wordBits-1);
+        }
+        if ( this.overflowed ){
+            console.log("OVERFLOW", addend, augend);
         }
 
-        return sum << 1;                // reinstate the sum's spacer bit
+        return sum;// << 1;                // reinstate the sum's spacer bit
     }
 
     /**************************************/
@@ -432,6 +435,7 @@ class Processor {
                 } else {
                     this.A.value = (Number(p/two32) << 1) >>> 0;
                 }
+                this.A.value = this.A.value << 1;
 
                 nextPhase = 1;
                 this.H.value = 0;
@@ -626,6 +630,7 @@ class Processor {
         this.Q.Q2 = 0;                  //  "
         if (this.Q.Q1) {                // check if we're skipping this instruction
             this.Q.Q1 = 0;              // yes, reset skip indicator
+            this.Q.Q2 = 1;
             nextPhase = 1;
         }
 
@@ -705,6 +710,8 @@ class Processor {
         (I/O, multiply, divide) will execute across multiple phase cycles and
         visit this and other phases more than once. Returns the next phase to
         be executed */
+        this.Q.Q1 = 0;                  // unconditionally reset skip indicator
+
         const dataAddr = (this.opWord & Util.addressMask) >>> Util.sectorShift; // for tracing
         let nextPhase = 1;
 
@@ -844,7 +851,6 @@ class Processor {
             }
         }
 
-        this.Q.Q1 = 0;                  // unconditionally reset skip indicator
         await this.disk.stepDisk();
         return nextPhase;
     }
@@ -1105,7 +1111,7 @@ class Processor {
             this.poweredOn = true;
             console.log("<System Power Up>");
 
-            this.loadMemory();                        // >>> DEBUG ONLY <<<
+            //this.loadMemory();                        // >>> DEBUG ONLY <<<
         }
     }
 
