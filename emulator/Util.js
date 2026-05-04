@@ -31,7 +31,6 @@ export const trackShift = 9;                    // bits to shift track field rig
 export const sectorMask = 0x000001FC;           // address sector bits (7)
 export const sectorShift = 2;                   // bits to shift address field right
 export const addressMask = 0x00003FFC;          // instruction address bits (12)
-export const addressIncrement = 1 << sectorShift; // value to increment address fields
 
 export const defaultRPM = 1125;                 // default disk revolution speed, rev/min
 export const maxRPM = defaultRPM*100;           // maximum disk revolution speed, rev/min

@@ -140,11 +140,12 @@ class Flexowriter {
 
         // Keyboard Type-O-Matic buffer controls
         this.tomBuffer = "";            // Type-O-Matic keystroke buffer
-        this.tomPaused = false;         // true if Type-O-Matic is currently suspended
         this.tomCanceled = false;       // true if Type-O-Matic has been canceled
         this.tomIndex = 0;              // current offset into the Type-O-Matic buffer
         this.tomLength = 0;             // current length of the Type-O-Matic text
+        this.tomPaused = false;         // true if Type-O-Matic is currently suspended
         this.tomUpperCase = false;      // current case state for TOM input
+        this.tomTimer = new Util.Timer();
 
         this.boundBeforeUnload = this.beforeUnload.bind(this);
         this.boundChangeCaseShift = this.changeCaseShift.bind(this);
@@ -734,7 +735,7 @@ class Flexowriter {
         this.tomCanceled = false;
         while (typing) {
             nextKeystrokeStamp += tomPeriod;
-            await this.timer.delayUntil(nextKeystrokeStamp);
+            await this.tomTimer.delayUntil(nextKeystrokeStamp);
 
             const key = this.tomBuffer[this.tomIndex];
             let code = IOCodes.ioTapeFeed;

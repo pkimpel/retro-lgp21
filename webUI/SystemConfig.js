@@ -25,7 +25,7 @@ class SystemConfig {
 
     static configStorageName = "retro-lgp21-Config";
     static configVersion = 1;
-    static flushDelay = 30000;          // flush timer setting, ms
+    static flushDelay = 60000;          // flush timer setting, ms
 
     static defaultConfig = {
         configName: "Default",
@@ -175,7 +175,6 @@ class SystemConfig {
 
         // Delete/modify obsolete configuration properties.
             // (RFE)
-        delete this.configData.Typewriter;
 
         // Recursively merge any new properties from the defaults.
         this.sortaDeepMerge(this.configData, SystemConfig.defaultConfig);

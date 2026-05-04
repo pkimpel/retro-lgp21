@@ -107,6 +107,7 @@ class FlexowriterTapeReader {
         this.flexowriter.stopTapeRead();
         this.bufIndex = 0;
         this.tapeSupplyBar.value = this.bufLength;
+        this.flexowriter.window.getSelection().removeAllRanges(); // deselect the menu icon
     }
 
     /**************************************/

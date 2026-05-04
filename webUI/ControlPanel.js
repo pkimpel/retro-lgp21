@@ -231,19 +231,35 @@ class ControlPanel {
     /**************************************/
     startSystem(ev) {
         /* Powers up and initializes the system for operation */
+        const p = this.processor;
 
         this.powerBtn.set(0);
         this.window.setTimeout(async () => {
-            await this.processor.powerUp();
+            await p.powerUp();
             this.$$("PowerBtnFX").style.display = "block";
             this.$$("PowerBtnFX").classList.add("powerUp");
+
             this.window.setTimeout(() => {      // wait for the DC power supplies...
                 this.powerBtn.set(1);
-                this.processor.modeSwitchChange(this.modeSwitch.state); // initialize processor mode
                 this.$$("PowerBtnFX").classList.remove("powerUp");
                 this.$$("PowerBtnFX").style.display = "none";
                 this.updatePanel();             // initialize the scope traces
                 this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
+
+                // Reinstate the former MODE switch setting and get the side effects.
+                const modeState = this.config.getNode("ControlPanel.modeSwitch");
+                this.modeSwitch.set(modeState);
+                switch (modeState) {
+                case ThreeWaySwitch.stateUp:        // MANUAL INPUT
+                    p.modeSwitchChange(Processor.modeManInput);
+                    break;
+                case ThreeWaySwitch.stateDown:      // NORMAL
+                    p.modeSwitchChange(Processor.modeNormal);
+                    break;
+                default:                            // ONE OPERATION
+                    p.modeSwitchChange(Processor.modeOneOperation);
+                    break;
+                }
             }, 4000);
         }, 500);
     }
@@ -404,14 +420,14 @@ class ControlPanel {
             this.config.putNode("ControlPanel.modeSwitch", this.modeSwitch.state);
 
             switch (this.modeSwitch.state) {
-            case ThreeWaySwitch.stateOff:       // ONE OPERATION
-                p.modeSwitchChange(Processor.modeOneOperation);
-                break;
             case ThreeWaySwitch.stateUp:        // MANUAL INPUT
                 p.modeSwitchChange(Processor.modeManInput);
                 break;
             case ThreeWaySwitch.stateDown:      // NORMAL
                 p.modeSwitchChange(Processor.modeNormal);
+                break;
+            default:                            // ONE OPERATION
+                p.modeSwitchChange(Processor.modeOneOperation);
                 break;
             }
             break;
@@ -427,10 +443,13 @@ class ControlPanel {
             // Golly, this is a kludge...
             if (e.tagName == "LABEL") {
                 if (e.classList.contains("modeCaptionTL")) {
+                    this.config.putNode("ControlPanel.modeSwitch", Processor.modeManInput);
                     p.modeSwitchChange(Processor.modeManInput);
                 } else if (e.classList.contains("modeCaptionML")) {
+                    this.config.putNode("ControlPanel.modeSwitch", Processor.modeOneOperation);
                     p.modeSwitchChange(Processor.modeOneOperation);
                 } else if (e.classList.contains("modeCaptionBL")) {
+                    this.config.putNode("ControlPanel.modeSwitch", Processor.modeNormal);
                     p.modeSwitchChange(Processor.modeNormal);
                 }
             }

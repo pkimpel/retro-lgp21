@@ -235,18 +235,18 @@ class Processor {
         // First, shift the two operands right one bit with zero fill to
         // eliminate the spacer bit and avoid JavaScript bitwise conversion
         // between twos-complement and Number (IEEE 754) representations.
-        const a = augend >>> 1;         // remove the spacer bits
-        const b = addend >>> 1;
+        const a = augend;
+        const b = addend;
         let sum = a + b;
         if (((augend ^ addend) & Util.wordSignMask)) {
             // Signs are different -- no overflow is possible.
             this.overflowed = 0;
         } else {
             // Signs are the same -- sum sign != augend sign => overflow.
-            this.overflowed = (a ^ sum) >>> (Util.wordBits-2);
+            this.overflowed = (a ^ sum) >>> (Util.wordBits-1);
         }
 
-        return sum << 1;                // reinstate the sum's spacer bit
+        return sum;
     }
 
     /**************************************/
@@ -335,11 +335,12 @@ class Processor {
 
     /**************************************/
     senseHalt() {
-        /* Executes the Z instruction, conditionally halting the processor,
-        clearing overflow and skipping the next instruction, sensing the
+        /* Executes the Z instruction, conditionally halting the processor, or
+        clearing overflow and skipping the next instruction, or sensing the
         breakpoint switches and skipping the next instruction, or a combination
         of those actions. If both halt and skip conditions are met, halt occurs
-        first */
+        first. Note that this test takes place at the end of Phase 4 (T3)
+        Assumes that Q1 is reset upon entry. Sets Q1 to command a skip */
         const track = this.P.value & 0b111110;
 
         if (this.R.value & Util.wordSignMask) { // negative instruction
@@ -371,36 +372,11 @@ class Processor {
     }
 
     /**************************************/
-    multiplyStep(forLow) {
+    multiplyStep(forN) {
         /* Multiplies A by the operand word, generating a 62-bit result.
-        If "forLow" is true, returns the 31 low-order bits of the result in A,
+        If "forN" is true, returns in A the 32 low-order bits of the result,
         otherwise the 30 high-order bits. THIS IS A TEMPORARY SHIM UNTIL A
         CORRECT ALGORITHM IS IMPLEMENTED */
-
-        /*****************************
-        const multiplicand = this.A.value;
-        let pSign = (multiplicand & Util.signBitMask) ^ (multiplier & Util.signBitMask);
-        let m1 = Math.abs(multiplicand);        // 31-bit abs value
-        let m2 = Math.abs(multiplier);          // 31-bit abs value
-        let p = m1*m2;                          // yields a 62-bit product
-
-        // First, move the scaling point of the product 32 bits left giving a 30-bit integer part.
-        let first30bits = p/(Util.wordSignMask << 1);
-
-        // Now return the high or low part as required.
-        if (forLow) {
-            // Discard the integer part, shift scaling point 31 bits right,
-            // extract the resulting integer part, and shift in the spacer bit.
-            p = Math.floor((p%1)*Util.wordSignMask) << 1;
-        } else {
-            // Extract the high-order 30-bit integer part and shift in the spacer bit.
-            p = Math.floor(p) << 1;
-        }
-
-        // Finally, apply the product sign and store in A.
-        this.A.value = pSign ? -p : p;
-        *****************************/
-
         let nextPhase = 4;              // continue in phase 4 until dummy timing completes
 
         if (this.H.value) {
@@ -422,13 +398,13 @@ class Processor {
                     multiplier = -multiplier;
                 }
 
-                let p = BigInt(multiplicand) * BigInt(multiplier) / 2n;
+                let p = BigInt(multiplicand) * BigInt(multiplier);
                 if (pSign) {
                     p = two64 - p;
                 }
 
-                if (forLow) {
-                    this.A.value = Number(p % two32) >>> 0;
+                if (forN) {
+                    this.A.value = Number(p/2n % two32) >>> 0;
                 } else {
                     this.A.value = (Number(p/two32) << 1) >>> 0;
                 }
@@ -459,26 +435,6 @@ class Processor {
         /* Divides A by the operand word, generating a 62-bit result, returning
         the high-order bits of the result in A. THIS IS A TEMPORARY SHIM UNTIL
         A CORRECT ALGORITHM IS IMPLEMENTED */
-
-        /*******************************
-        let num = this.A.value;
-        let denom = this.disk.read();
-        let qSign = (num & Util.signBitMask) ^ (denom & Util.signBitMask);
-        let d1 = Math.abs(num & Util.wordMask);
-        let d2 = Math.abs(denom & Util.wordMask);
-
-        let q = d1/d2;
-        if (q >= 1) {
-            this.C.setOverflow(1);
-            q = q%1;                    // extract the fractional part
-        }
-
-        // Shift the scaling point 30 bits right, extract the integer part,
-        // shift in the space bit, and apply the sign.
-        q = Math.round(q*(Util.wordSignMask >>> 1)) << 1;
-        this.A.value = qSign ? -q : q;
-        *********************************/
-
         let nextPhase = 4;              // continue in phase 4 until dummy timing completes
 
         if (this.H.value) {
@@ -501,13 +457,13 @@ class Processor {
                 }
 
                 let q = (BigInt(dividend)*two32) / BigInt(divisor) /2n;
-                if (dividend >= divisor) {
-                    this.C.setOverflow(1);
-                    q = q % two32;
-                }
-
                 if (qSign) {
                     q = two32 - q;
+                }
+
+                if (dividend >= divisor) {
+                    this.C.setOverflow(1);
+                    q = q % two32;      // strip any overflow bits
                 }
 
                 this.A.value = Number(q) >>> 0;
@@ -623,7 +579,6 @@ class Processor {
         this.P.value = (word & Util.addressMask) >>> (Util.trackShift-1);
         this.G.value = 0;               // for display only
         this.K.value = 1;               //  "
-        this.Q.Q2 = 0;                  //  "
         if (this.Q.Q1) {                // check if we're skipping this instruction
             this.Q.Q1 = 0;              // yes, reset skip indicator
             nextPhase = 1;
@@ -710,7 +665,7 @@ class Processor {
 
         switch (this.order) {
         case Processor.opSenseHalt:     // Z: Sense/Halt
-            this.senseHalt();
+            // Executed at the end of Phase 4, see below.
             break;
 
         case Processor.opBring:         // B: Bring (load A)
@@ -845,6 +800,10 @@ class Processor {
         }
 
         this.Q.Q1 = 0;                  // unconditionally reset skip indicator
+        if (this.Q.value == Processor.senseHalt) {
+            this.senseHalt();           // Z: Sense/Halt (may turn Q1 back on to command a skip)
+        }
+
         await this.disk.stepDisk();
         return nextPhase;
     }
@@ -1105,7 +1064,9 @@ class Processor {
             this.poweredOn = true;
             console.log("<System Power Up>");
 
-            this.loadMemory();                        // >>> DEBUG ONLY <<<
+            if (false) {
+                this.loadMemory();                      // >>> DEBUG ONLY <<<
+            }
         }
     }
 

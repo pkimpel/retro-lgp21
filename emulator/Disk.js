@@ -31,6 +31,8 @@ import {WaitSignal} from "./WaitSignal.js";
 
 class RegisterC extends Register {
 
+    static addressIncrement = 1 << Util.sectorShift; // value to increment address fields
+
     incAddress() {
         /* Increments only the address portion of the register, discarding
         any overflow to achieve address wraparound */
@@ -39,7 +41,8 @@ class RegisterC extends Register {
            this.updateLampGlow(0);
         }
 
-        this.intVal = (this.intVal+Util.addressIncrement) & Util.addressMask;
+        this.intVal = (this.intVal & ~Util.addressMask) |
+                      (this.intVal+RegisterC.addressIncrement) & Util.addressMask;
     }
 
     setOverflow(value) {
