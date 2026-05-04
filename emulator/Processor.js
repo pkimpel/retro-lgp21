@@ -404,7 +404,7 @@ class Processor {
                 }
 
                 if (forN) {
-                    this.A.value = Number(p/2n % two32) >>> 0;
+                    this.A.value = Number(p % two32) >>> 0;
                 } else {
                     this.A.value = (Number(p/two32) << 1) >>> 0;
                 }
@@ -800,7 +800,7 @@ class Processor {
         }
 
         this.Q.Q1 = 0;                  // unconditionally reset skip indicator
-        if (this.Q.value == Processor.senseHalt) {
+        if (this.order == Processor.opSenseHalt) {
             this.senseHalt();           // Z: Sense/Halt (may turn Q1 back on to command a skip)
         }
 
