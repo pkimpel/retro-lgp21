@@ -42,7 +42,7 @@ class RegisterC extends Register {
         }
 
         this.intVal = (this.intVal & ~Util.addressMask) |
-                      (this.intVal+RegisterC.addressIncrement) & Util.addressMask;
+                      ((this.intVal & Util.addressMask) + RegisterC.addressIncrement) & Util.addressMask;
     }
 
     setOverflow(value) {

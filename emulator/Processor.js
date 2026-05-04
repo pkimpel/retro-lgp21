@@ -58,6 +58,8 @@ class RegisterP extends Register {
 
 class Processor {
 
+    static debugging = false;
+
     // MODE switch values.
     static modeOneOperation = 0;
     static modeManInput = 1;
@@ -404,7 +406,7 @@ class Processor {
                 }
 
                 if (forN) {
-                    this.A.value = Number(p/2n % two32) >>> 0;
+                    this.A.value = Number(p % two32) >>> 0;
                 } else {
                     this.A.value = (Number(p/two32) << 1) >>> 0;
                 }
@@ -582,6 +584,7 @@ class Processor {
         if (this.Q.Q1) {                // check if we're skipping this instruction
             this.Q.Q1 = 0;              // yes, reset skip indicator
             nextPhase = 1;
+            this.lastOpEnded = true;    // don't trace skipped instructions
         }
 
         await this.disk.stepDisk();
@@ -800,7 +803,7 @@ class Processor {
         }
 
         this.Q.Q1 = 0;                  // unconditionally reset skip indicator
-        if (this.Q.value == Processor.senseHalt) {
+        if (this.order == Processor.opSenseHalt) {
             this.senseHalt();           // Z: Sense/Halt (may turn Q1 back on to command a skip)
         }
 
@@ -1064,7 +1067,7 @@ class Processor {
             this.poweredOn = true;
             console.log("<System Power Up>");
 
-            if (false) {
+            if (Processor.debugging && window.location.hostname == "localhost") {
                 this.loadMemory();                      // >>> DEBUG ONLY <<<
             }
         }
@@ -1117,10 +1120,10 @@ class Processor {
         asm( 6, 11,   16);      // TEST     16
         asm( 7,  9,  116);      // EXTRACT 116
         asm( 8,  0,    0);      // HALT      0
-        asm( 9, 11,    0);      // TEST      0
 
-        asm(16,  0,    0);      // HALT
-
+        asm(16,  0,    0, true);// -HALT     0
+        asm(17,  0,    1);      // HALT
+        asm(18,  0,    2);      // HALT
 
         int(116,        123);
         int(117,        456);
