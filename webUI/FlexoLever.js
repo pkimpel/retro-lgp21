@@ -33,7 +33,7 @@ class FlexoLever {
             id          the DOM id for the switch object.
             momentary   true if this is a momentary switch, false if latching */
 
-        this.state = 0;                     // current switch state, 0=off (up)
+        this.state = 0;                 // current switch state, 0=off (up)
 
         // visible DOM element
         this.element = document.createElement("button");
@@ -41,6 +41,8 @@ class FlexoLever {
         this.element.className = FlexoLever.offClass;
         this.momentary = momentary ? true : false;
         this.boundFlip = this.flip.bind(this);
+        this.boundLeverDown = this.leverDown.bind(this);
+        this.boundLeverUp = this.leverUp.bind(this);
 
         if (x !== null) {
             this.element.style.left = x.toString() + "px";
@@ -58,8 +60,8 @@ class FlexoLever {
         if (!this.momentary) {
             this.element.addEventListener("click", this.boundFlip, false);
         } else {
-            this.element.addEventListener("mousedown", this.boundFlip, false);
-            this.element.addEventListener("mouseup", this.boundFlip, false);
+            this.element.addEventListener("mousedown", this.boundLeverDown, false);
+            this.element.addEventListener("mouseup", this.boundLeverUp, false);
         }
     }
 
@@ -100,6 +102,20 @@ class FlexoLever {
     }
 
     /**************************************/
+    leverDown(ev) {
+        /* Handles the mousedown event for a momentary switch */
+
+        this.set(1);
+    }
+
+    /**************************************/
+    leverUp(ev) {
+        /* Handles the mouseup event for a momentary switch */
+
+        this.set(0);
+    }
+
+    /**************************************/
     setLabel(label) {
         /* Sets the switch's label */
 
@@ -113,8 +129,8 @@ class FlexoLever {
         if (!this.momentary) {
             this.element.removeEventListener("click", this.boundFlip, false);
         } else {
-            this.element.removeEventListener("mousedown", this.boundFlip, false);
-            this.element.removeEventListener("mouseup", this.boundFlip, false);
+            this.element.removeEventListener("mousedown", this.boundLeverDown, false);
+            this.element.removeEventListener("mouseup", this.boundLeverUp, false);
         }
     }
 } // class FlexoLever

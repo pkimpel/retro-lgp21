@@ -14,8 +14,9 @@
 
 export {ControlPanel};
 
-import * as Util from "../emulator/Util.js";
 import * as Version from "../emulator/Version.js";
+import * as Util from "../emulator/Util.js";
+import * as IOCodes from "../emulator/IOCodes.js";
 import {FlipFlop} from "../emulator/FlipFlop.js";
 import {openPopup} from "./PopupUtil.js";
 import {Processor} from "../emulator/Processor.js";
@@ -57,6 +58,7 @@ class ControlPanel {
     innerHeight = 0;                    // window specified innerHeight
     window = null;                      // window object
 
+    // Performance stats
     avgInstructionRate = 0;             // running average instructions/sec
     intervalToken = 0;                  // panel refresh timer cancel token
     lastETime = 0;                      // last emulation clock value
@@ -83,6 +85,7 @@ class ControlPanel {
         this.boundPanelUnload = this.panelUnload.bind(this);
         this.boundControlSwitchClick = this.controlSwitchClick.bind(this);
         this.boundResetTiming = this.resetTiming.bind(this);
+        this.boundOpenDebugPanel = this.openDebugPanel.bind(this);
         this.boundToggleTracing = this.toggleTracing.bind(this);
         this.boundShutDown = this.shutDown.bind(this);
 
@@ -123,16 +126,21 @@ class ControlPanel {
     }
 
     /**************************************/
-    resetTiming(ev) {
+    resetTiming() {
         /* Double-click handler for the HeaderTable element. Sets this.runTimeOffset
-        to the current Disk.RunTime to zero the display of      total run time on the panel */
-        const disk = this.context.processor.disk; // local copy of Disk reference
+        to the current Disk.RunTime to zero the display of total run time on the panel */
+        const now = performance.now();
+        let rt = this.processor.disk.runTime;
 
-        this.runTimeOffset = disk.runTime;
+        while (rt < 0) {
+            rt += now;
+        }
+
+        this.runTimeOffset = rt;
     }
 
     /**************************************/
-    async panelOnLoad(ev) {
+    panelOnLoad(ev) {
         /* Initializes the Control Panel window and user interface */
         const p = this.processor;
         let parent = null;              // parent sub-panel DOM object
@@ -140,6 +148,8 @@ class ControlPanel {
         this.doc = ev.target;
         this.window = this.doc.defaultView;
         let body = this.doc.body;
+
+        this.$$("LGP21Version").textContent = Version.lgp21Version;
 
         parent = this.$$("SwitchFrame");
         this.runTime = this.$$("RunTime");
@@ -210,9 +220,9 @@ class ControlPanel {
         this.scopePathR = this.$$("ScopeRTrace");
         this.scopePathA = this.$$("ScopeATrace");
 
-        this.$$("LGP21Version").textContent = Version.lgp21Version;
         this.window.addEventListener("beforeunload", this.boundBeforeUnload);
         this.window.addEventListener("unload", this.boundPanelUnload);
+        this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
         this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
         this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
         this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
@@ -243,6 +253,7 @@ class ControlPanel {
                 this.powerBtn.set(1);
                 this.$$("PowerBtnFX").classList.remove("powerUp");
                 this.$$("PowerBtnFX").style.display = "none";
+                this.resetTiming();             // initialize the run timer
                 this.updatePanel();             // initialize the scope traces
                 this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
 
@@ -457,6 +468,210 @@ class ControlPanel {
         }
     }
 
+
+    /*******************************************************************
+    *   Debug Panel                                                    *
+    *******************************************************************/
+
+    /**************************************/
+    openDebugPanel(ev) {
+        /* Opens the DebugPanelDiv and wires up its events */
+        const p = this.processor;
+        const MM = p.disk.diskMem;
+        const memSize = p.disk.diskSize;
+
+        const hex = (v) => v.toString(16).padStart(8, "0");
+
+        const xlateText = (word) => {
+            let w = word >>> 0;
+            let s = IOCodes.ioTapeCodeToASCII[(w >>> 26) & 0x3F];
+            for (let i = 0; i<4; ++i) {
+                w = (w << 6) >>> 0;
+                s += IOCodes.ioTapeCodeToASCII[(w >>> 26) & 0x3F];
+            }
+
+            return s;
+        };
+
+        //----------------------------
+        const formatMemDump = (putLine) => {
+            /* Formats the contents of memory in MemDump format and outputs it
+            through the putLine() function parameter */
+            const wpl = 8;              // words per line
+            const alphaStart = wpl*8 + 16; // line length before alpha interpretation
+
+            let addr = 0;               // current memory address
+            let alpha = "";             // alpha interpretation of words on line
+            let dups = 0;               // count of contiguous duplicate words
+            let lastWord = -1;          // value of prior word output
+            let line = "";              // line assembly buffer
+            let lineAddr = 0;           // address of start of line
+            let word = 0;               // scratch variable
+            let words = wpl;            // words placed on current line (initialized for overflow)
+
+            const startLine = (addr) => {
+                line = `${addr.toString().padStart(4)} ${Util.lgp21DecAddress(addr)} ` +
+                       `${Util.lgp21Hex(addr<<2).slice(-4)}: `;
+                lineAddr = addr;
+                words = 0;
+                alpha = "";
+            };
+
+            const endLine = () => {
+                if (alpha.length) {
+                    putLine(`${line.padEnd(alphaStart, " ")}${alpha}`);
+                } else {
+                    putLine(line);
+                }
+            };
+
+            const putWord = (word) => {
+                line += `${(word >>> 0).toString(16).padStart(8, "0").toUpperCase()} `;
+                alpha += xlateText(word);
+                lastWord = word;
+                ++words;
+            };
+
+            putLine(`retro-lgp21 v${Version.lgp21Version} Memory Dump - ${(new Date()).toString()}`);
+            putLine("");
+
+            word = p.C.value >>> 0;
+            addr = (word & Util.addressMask) >>> Util.sectorShift;
+            putLine(`C=${hex(word)}:    ${Util.lgp21DecAddress(addr)} (${addr.toString().padStart(4)})`);
+
+            word = p.R.value >>> 0;
+            addr = (word & Util.addressMask) >>> Util.sectorShift;
+            putLine(`R=${hex(word)}: ${Util.lgp21FormatOp(word)} (${addr.toString().padStart(4)})`);
+
+            word = p.A.value >>> 0;
+            putLine(`A=${hex(word)}: ${(word|0).toString()} "${xlateText(word)}"`);
+
+            putLine(`P=0x${p.P.value.toString(16).padStart(2, "0")}` +
+                           ` (${p.P.value.toString(2).padStart(6, "0")}) ` +
+                           ` Q1${p.Q.Q1 ? "+":"-"} Q2${p.Q.Q2 ? "+":"-"} Q3${p.Q.Q3 ? "+":"-"} Q4${p.Q.Q4 ? "+":"-"}`);
+            putLine("");
+            line = "Addr TTSS iAddr";
+            addr = 0;
+
+            while (addr < memSize) {
+                word = MM[addr] >>> 0;
+                if (word == lastWord) {
+                    ++dups;                     // count contiguous zero words
+                } else {
+                    // Fill in any duplicate words that will fit on the line.
+                    while (dups && words < wpl) {
+                        putWord(lastWord);
+                        --dups;
+                    }
+
+                    // If there are remaining dups, skip to the line with the current address.
+                    if (dups) {
+                        endLine();
+                        lineAddr += wpl;
+                        const dupLines = Math.floor(dups/wpl);
+                        if (dupLines > 1) {     // at least two lines of dups
+                            const elided = dupLines*wpl;
+                            putLine(`${(" ").padEnd(21)}[ ${elided} words of ` +
+                                    `${lastWord.toString(16).padStart(8, "0")} "${xlateText(lastWord)}" ]`);
+                            dups -= elided;
+                            lineAddr += elided;
+                        }
+
+                        startLine(lineAddr);
+                        while (dups) {          // output any remaining dups
+                            if (words >= wpl) {
+                                endLine();
+                                startLine(lineAddr + wpl);
+                            }
+
+                            putWord(lastWord);
+                            --dups;
+                        }
+                    }
+
+                    // Output the current non-zero word, starting a new line as needed.
+                    if (words >= wpl) {
+                        endLine();
+                        startLine(addr);
+                    }
+
+                    putWord(word);
+                }
+
+                // Increment memory address.
+                ++addr;
+            }
+
+            // Fill in any final duplicates that will fit on the line.
+            while (dups && words < wpl) {
+                putWord(lastWord);
+                --dups;
+            }
+
+            // If there are still final dups, output a final suppression line.
+            endLine();
+            if (dups) {
+                putLine(`${(" ").padEnd(21)}[ ${dups} words of ` +
+                        `${lastWord.toString(16).padStart(8, "0")} "${xlateText(lastWord)}" ]`);
+            }
+
+            putLine("");
+            putLine("End Memory Dump");
+        };
+
+        //----------------------------
+        const buildMemDumpView = (ev) => {
+            /* Handles the onLoad event for the MemDump view pop-up window and
+            populates the window with the MemDump */
+            const doc = ev.target;
+            const win = doc.defaultView;
+            const text = doc.getElementById("Paper");
+            const title = "retro-lgp21 Memory Dump";
+
+            const putLine = (line) => {
+                text.appendChild(doc.createTextNode(line.trimEnd() + "\n"));
+            };
+
+            doc.title = title;
+            text.style.fontFamily = "DejaVuSansMonoWeb,monospace";
+            text.style.fontSize = "9pt";
+            text.style.width = "fit-content";
+            win.moveTo((screen.availWidth-win.outerWidth)/2, (screen.availHeight-win.outerHeight)/2);
+            formatMemDump(putLine);
+        };
+
+        //----------------------------
+        const initiateMemDumpView = (ev) => {
+            /* Formats the contents of core memory to a pop-up window, from which the
+            user can copy/save/print it as they desire */
+            const title = "retro-1620 Memory Dump";
+
+            openPopup(this.window, "./FramePaper.html", "",
+                    "scrollbars,resizable,width=882,height=500", this, buildMemDumpView);
+            closeDebugPanel(ev);
+        };
+
+        //----------------------------
+        const closeDebugPanel = (ev) => {
+            /* Unwires the local events and closes the debug panel */
+
+            this.$$("DebugCloseBtn").removeEventListener("click", closeDebugPanel);
+            this.$$("DebugMemDumpBtn").removeEventListener("click", initiateMemDumpView);
+            this.$$("DebugPanelDiv").style.display = "none";
+        };
+
+        //--------Outer Block---------
+
+        this.$$("DebugPanelDiv").style.display = "block";
+        this.$$("DebugMemDumpBtn").addEventListener("click", initiateMemDumpView);
+        this.$$("DebugCloseBtn").addEventListener("click", closeDebugPanel);
+    }
+
+
+    /*******************************************************************
+    *   Termination                                                    *
+    *******************************************************************/
+
     /**************************************/
     beforeUnload(ev) {
         const msg = "Closing this window will make the panel unusable.\n" +
@@ -500,6 +715,7 @@ class ControlPanel {
             this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
             //this.$$("GPLogoTurquoise").removeEventListener("dblClick", this.boundOpenDebugPanel);
             this.config.putWindowGeometry(this.window, "ControlPanel");
+            this.$$("GPLogoTurquoise").removeEventListener("dblclick", this.boundOpenDebugPanel);
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("RunTimerDiv").removeEventListener("dblclick", this.boundResetTiming);
             this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing, false);

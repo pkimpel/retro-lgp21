@@ -40,7 +40,7 @@
                 <label id=UCIndicator for=UCBtn>UPPER</label>
             </fieldset>
 
-            <div id=PrinterCol></div>
+            <div id=PrinterCol title="Typewriter column number"></div>
 
             <fieldset id=ColorIndicator title="Click to toggle the printing color">
                 <label id=BlackIndicator for=BlackBtn>BLACK</label>
@@ -49,6 +49,8 @@
                 <label id=RedIndicator for=RedBtn class=red>RED</label>
             </fieldset>
         </div>
+
+        <div id=LGP21InputActiveIcon title="Responding to LGP-21 request for input">&#x27A0;</div>
 
         <div id=PaperTapeFrame>
             <div id=PaperTapeReader>
@@ -64,9 +66,10 @@
                         <option value=.ptp         >.ptp
                         <option value=.ptx         >.ptx
                     </select>
-                    <input id=PRFileSelector type=file size=40 multiple>
+                    <div id=PRBufferStatus>Buffer <span id=PRBufferLevel>Empty</span></div>
                     <button id=PRUnloadBtn>UNLOAD</button>
                     <button id=PRMenuCloseBtn>CLOSE</button>
+                    <input id=PRFileSelector type=file size=40 multiple>
                 </div>
             </div>
 

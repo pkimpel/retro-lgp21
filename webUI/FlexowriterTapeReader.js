@@ -58,6 +58,7 @@ class FlexowriterTapeReader {
         this.processor = context.processor;
         this.flexowriter = flexowriter;
         this.tapeSupplyBar = $$("PRTapeSupplyBar");
+        this.bufferLevel = $$("PRBufferLevel");
 
         this.boundFileSelectorChange = this.fileSelectorChange.bind(this);
         this.boundMenuClick = this.menuClick.bind(this);
@@ -74,6 +75,7 @@ class FlexowriterTapeReader {
         /* Initializes (and if necessary, creates) the reader unit state */
 
         this.ready = false;             // a tape has been loaded into the reader
+        this.menuOpened = false;        // tape reader menu is currently open
 
         this.buffer = null;             // reader input buffer (paper-tape image)
         this.bufLength = 0;             // current input buffer length (characters)
@@ -81,6 +83,14 @@ class FlexowriterTapeReader {
         this.nextStartStamp = 0;        // earliest time next read can start
 
         this.setReaderEmpty();
+    }
+
+    /**************************************/
+    updateBufferLevel() {
+        /* Updates the buffer level display on the tape reader menu */
+
+        this.bufferLevel.textContent = this.bufLength > 0 ?
+                `${this.bufLength - this.bufIndex}/${this.bufLength}` : "Empty";
     }
 
     /**************************************/
@@ -95,6 +105,7 @@ class FlexowriterTapeReader {
         this.bufIndex = 0;
         this.$$("PRFileSelector").value = null; // reset the control so the same file can be reloaded
         this.$$("PRFormatSelect").selectedIndex = 0;    // default to Auto
+        this.updateBufferLevel();
     }
 
     /**************************************/
@@ -108,6 +119,7 @@ class FlexowriterTapeReader {
         this.bufIndex = 0;
         this.tapeSupplyBar.value = this.bufLength;
         this.flexowriter.window.getSelection().removeAllRanges(); // deselect the menu icon
+        this.updateBufferLevel();
     }
 
     /**************************************/
@@ -235,9 +247,10 @@ class FlexowriterTapeReader {
             }
         }
 
+        this.updateBufferLevel();
         setTimeout(() => {
             this.menuClose();
-        }, 3);
+        }, 2000);
     }
 
     /**************************************/
@@ -245,10 +258,12 @@ class FlexowriterTapeReader {
         /* Opens the reader menu panel and wires up events */
         const prMenu = this.$$("PRControlsMenu");
 
-        if (prMenu.style.display != "block") {
+        if (!this.menuOpened) {
+            this.menuOpened = true;
             prMenu.style.display = "block";
             prMenu.addEventListener("click", this.boundMenuClick, false);
             this.$$("PRFileSelector").addEventListener("change", this.boundFileSelectorChange);
+            this.updateBufferLevel();
         }
     }
 
@@ -257,6 +272,7 @@ class FlexowriterTapeReader {
         /* Closes the punch menu panel and disconnects events */
         const prMenu = this.$$("PRControlsMenu");
 
+        this.menuOpened = false;
         prMenu.removeEventListener("click", this.boundMenuClick, false);
         prMenu.style.display = "none";
         this.$$("PRFileSelector").removeEventListener("change", this.boundFileSelectorChange);
@@ -276,6 +292,7 @@ class FlexowriterTapeReader {
             break;
         case "PRUnloadBtn":
             this.setReaderEmpty();
+            this.updateBufferLevel();
             break;
         case "PRMenuCloseBtn":
             this.menuClose();
@@ -301,6 +318,10 @@ class FlexowriterTapeReader {
         }
 
         this.bufIndex = x;
+        if (this.menuOpened) {
+            this.updateBufferLevel();
+        }
+
         return code;
     }
 

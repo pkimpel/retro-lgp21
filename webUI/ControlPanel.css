@@ -261,3 +261,43 @@ LABEL.modeCaptionBL {
     bottom:             22%;
     width:              70%;
     transform:          translate(-50%, 50%)}
+
+/* Debug Panel */
+
+#DebugPanelDiv {
+    position:           absolute;
+    display:            none;
+    left:               50%;
+    top:                10%;
+    width:              fit-content;
+    min-width:          40ch;
+    transform:          translate(-50%, 0);
+    z-index:            10;
+    background-color:   #FFE;
+    padding:            8px;
+    border:             2px solid black;
+    border-radius:      8px;
+    box-shadow:         4px 4px 4px black}
+#DebugPanelDiv BUTTON {
+    height:             fit-content;
+    width:              fit-content;
+    line-height:        1;
+    padding:            4px;
+    font-weight:        normal;
+    color:              white;
+    background-color:   #1E8200;
+    border:             2px solid #666}
+#DebugPanelDiv TABLE {
+    width:              100%}
+#DebugPanelDiv H2 {
+    margin-top:         0;
+    margin-bottom:      4px}
+#DebugMemDumpBtn {
+    position:           relative;
+    left:               50%;
+    transform:          translate(-50%, 0)}
+#DebugPanelControlDiv {
+    position:           static;
+    width:              100%;
+    margin-top:         8px;
+    text-align:         right}

@@ -53,7 +53,7 @@ HTML {
 
 BODY {
     font-family:        DejaVuSansWeb, sans-serif;
-    font-size:          10pt;
+    font-size:          14px;                   /* ~10pt */
     background-color:   white;
     color:              black;
     height:             calc(100% - 16px);
@@ -62,13 +62,13 @@ BODY {
 
 BODY.panelBody {
     position:           relative;
-    font-size:          8pt;
+    font-size:          11px;
     margin:             0;
     padding:            0;
     cursor:             default}
 
 BODY.deviceBody {
-    font-size:          7pt;
+    font-size:          10px;
     overflow:           hidden;
     margin:             0;
     padding:            0;
@@ -91,7 +91,7 @@ PRE.paper {
 
 INPUT[type=text] {
     font-family:        DejaVuSansMonoBookWeb, monospace;
-    font-size:          8pt}
+    font-size:          12px}
 
 DIV.paper {
     font-family:        Pica10BTRoman, monospace;
@@ -187,7 +187,7 @@ LABEL.toggleCaptionBottomLeft {
 
 BUTTON {
     font-family:        DejaVuSansWeb, sans-serif;
-    font-size:          10pt;
+    font-size:          14px;
     font-weight:        bold;
     line-height:        120%;
     width:              60px;
@@ -199,7 +199,7 @@ BUTTON {
 
 BUTTON.large {
     font-family:        DejaVuSansWeb, sans-serif;
-    font-size:          8pt;
+    font-size:          11px;
     font-weight:        normal;
     line-height:        120%;
     width:              60px;
@@ -234,7 +234,7 @@ BUTTON.redButtonLit {
     visibility:         hidden;
     white-space:        nowrap;
     font-family:        DejaVuSansWeb, sans-serif;
-    font-size:          7pt;
+    font-size:          10px;
     line-height:        100%}
 .annunciatorLit {
     visibility:         visible}

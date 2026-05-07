@@ -27,6 +27,7 @@ import * as IOCodes from "./IOCodes.js";
 import {Disk} from "./Disk.js";
 import {FlipFlop} from "./FlipFlop.js";
 import {Register} from "./Register.js";
+import {WaitSignal} from "./WaitSignal.js";
 
 
 class RegisterQ extends Register {
@@ -101,7 +102,7 @@ class Processor {
         this.G  = new FlipFlop(this.disk, false);       //     "
         this.H  = new FlipFlop(this.disk, false);       //     "
         this.K  = new FlipFlop(this.disk, false);       // miscellaneous control
-        this.X  = new FlipFlop(this.disk, false);       // true => I/O completed
+        this.X  = new FlipFlop(this.disk, false);       // 1 => I/O completed
 
         // Registers (some registers are implemented in the Disk object)
         this.A  = this.disk.regA;                       // accumulator register
@@ -136,7 +137,8 @@ class Processor {
 
         // I/O Subsystem
         this.activeIODevice = null;                     // current I/O device object (not null => Faf)
-        this.waitingIO = false;                         // current I/O is waiting for the device
+        this.waitingIODevice = false;                   // current I/O is waiting for the device
+        this.readyForInput = new WaitSignal();          // signals Processor is ready for an input code
     }
 
 
@@ -290,9 +292,12 @@ class Processor {
         /* Terminates any currently-active I/O operation */
 
         if (this.activeIODevice) {
-            this.waitingIO = false;
-            this.X.value = 1;       // signal end-of-IO
-            this.activeIODevice = null;
+            this.activeIODevice = null;         // allow Phase 1 to proceed to next instruction
+            this.X.value = 1;                   // signal end-of-IO
+            this.waitingIODevice = false;
+            if (this.readyForInput.waiting) {
+                this.readyForInput.proceed(-3); // indicate I/O has terminated
+            }
         }
     }
 
@@ -303,24 +308,34 @@ class Processor {
           - For normal input, if the code a COND STOP or negative code
             (indicating I/O was canceled), terminates the I/O by setting the
             activeIODevice to null; if the code is one that does not enter the
-            A register, ignores it; otherwise resets the waitingIO flag to allow
+            A register, ignores it; otherwise resets waitingIODevice to allow
             Phase 1 to finish and Phase 4 to shift the (rotated) code into the
             A register.
           - For Manual Input, the same filtering of input codes takes place,
-            but there is no I/O operation to terminate, and the first 4 bits of
-            P are unconditionally shifted left into the A register */
+            but there is no I/O operation to terminate, and the first 4 bits
+            of P are unconditionally shifted left into the A register.
+        If no I/O is in progress, returns -1; if an error occurs while waiting
+        to be for input, returns that error code; otherwise returns 0 */
+        let result = 0;
 
-        if (this.modeSwitch == Processor.modeManInput ||
-                // Ignore if not active I/O, not waiting for a code, or not input.
-                (this.activeIODevice && this.waitingIO && !this.X.value)) {
-            if (code == IOCodes.ioCondStop || code < 0) { // read stopped
+        // If we're not currently doing I/O, or the I/O has finished, reject the code.
+        if (this.activeIODevice === null || this.X.value) {
+            result = -1;
+        } else {
+            if (!this.waitingIODevice) {        // don't get ahead of our skis
+                result = await this.readyForInput.wait();
+            }
+
+            if (result) {
+                // Just pass the error back to caller.
+            } else if (code == IOCodes.ioCondStop || code < 0) { // read stopped
                 if (this.modeSwitch == Processor.modeManInput) {
                     this.activeIODevice.enableSend(false); // reassert Flexowriter send mode
                 } else {
                     this.terminateIO();
                 }
-            } else if (code == IOCodes.ioDelete) {
-                // Ignore Delete (rubout) codes
+            } else if (code == IOCodes.ioTapeFeed || code == IOCodes.ioDelete) {
+                // Ignore Tape Feed and Delete (rubout) codes
             } else if ((code & 0b100001) == 0 && this.K.value) {
                 // Ignore 0xxxx0 codes in 4-bit mode.
             } else {
@@ -329,10 +344,12 @@ class Processor {
                if (this.modeSwitch == Processor.modeManInput) {
                    this.A.value = ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2);
                } else {
-                   this.waitingIO = false;              // input is read for shifting in P4
+                   this.waitingIODevice = false;        // input is ready for shifting in P4
                }
             }
         }
+
+        return result;
     }
 
     /**************************************/
@@ -387,9 +404,10 @@ class Processor {
             } else {
                 const two32 =         0x100000000n;
                 const two64 = 0x10000000000000000n;
-                let multiplicand = this.A.value | 0;
+                let multiplicand = this.A.value | 0;    // make sure these are in IEEE format
                 let multiplier = this.dataWord | 0;
                 let pSign = 0;
+
                 if (multiplicand < 0) {
                     pSign ^= 1;
                     multiplicand = -multiplicand;
@@ -445,9 +463,10 @@ class Processor {
             } else {
                 const two32 =         0x100000000n;
                 const two64 = 0x10000000000000000n;
-                const dividend = this.A.value | 0;
+                const dividend = this.A.value | 0;      // make sure these are in IEEE format
                 const divisor = this.dataWord | 0;
                 let qSign = 0;
+
                 if (dividend < 0) {
                     qSign ^= 1;
                     dividend = -dividend;
@@ -458,17 +477,16 @@ class Processor {
                     divisor = -divisor;
                 }
 
-                let q = (BigInt(dividend)*two32) / BigInt(divisor) /2n;
-                if (qSign) {
-                    q = two32 - q;
-                }
+                if (divisor < dividend) {       // also detects divide by zero
+                    this.C.setOverflow(1);      // just leave the dividend in A
+                } else {
+                    let q = BigInt(dividend)*two32 / BigInt(divisor) /2n;
+                    if (qSign) {
+                        q = two32 - q;
+                    }
 
-                if (dividend >= divisor) {
-                    this.C.setOverflow(1);
-                    q = q % two32;      // strip any overflow bits
+                    this.A.value = Number(q) >>> 0;
                 }
-
-                this.A.value = Number(q) >>> 0;
 
                 nextPhase = 1;
                 this.H.value = 0;
@@ -503,43 +521,39 @@ class Processor {
         is ready */
         let nextPhase = 1;              // stay in this phase by default
 
-        switch (true) {
-        case this.activeIODevice !== null && this.Q.Q3 == 0:    // active input I/O
-            if (!this.waitingIO) {
-                nextPhase = 3;          // input code received into P
-            }
-            break;
+        if (this.activeIODevice) {
+            if (!this.Q.Q3) {           // Input I/O is active.
+                if (!this.waitingIODevice) {
+                    nextPhase = 3;      // process the input code received into P
+                }
+            } else {                    // Output I/O is active.
+                // If output is 4-bit mode, apply correct zone bits to the internal code.
+                if (this.K.value) {
+                    this.P.value = (this.P.value & 0b111100) | 0b000010;
+                }
 
-        case this.activeIODevice !== null && this.Q.Q3 != 0:    // active output I/O
-            // If output is 4-bit mode, apply correct zone bits to the internal code.
-            if (this.K.value) {
-                this.P.value = (this.P.value & 0b111100) | 0b000010;
-            }
-
-            // Rotate the internal code in P to tape code format. Send P to the
-            // output device to see if it's busy -- if not, repeat Phase 1.
-            // If accepted, terminate I/O but stay in P1 to start next instruction.
-            {
-                const tp = (this.P.value >>> 1) | ((this.P.value & 1) << 5);
-                if (this.activeIODevice.write(tp) >= 0) {       // < 0 => busy
+                // Rotate the internal code in P to tape-code format. Send P to
+                // the output device. If device is busy, repeat Phase 1; if not,
+                // the code was accepted, so terminate the I/O but stay in P1 to
+                // start the next instruction.
+                const tapeCode = (this.P.value >>> 1) | ((this.P.value & 1) << 5);
+                if (this.activeIODevice.write(tapeCode) >= 0) { // < 0 => busy
                     this.terminateIO();
                 }
 
                 /********** DEBUG PRINT **********  /
                 console.debug(`<P1> Print: P=${this.P.value.toString(2).padStart(6,'0')}` +
-                              `, K=${this.K.value}, code=${tp.toString(2).padStart(6,'0')}` +
-                              ` '${IOCodes.ioTapeCodeToASCII[tp]}'`);
+                              `, K=${this.K.value}, code=${tapeCode.toString(2).padStart(6,'0')}` +
+                              ` '${IOCodes.ioTapeCodeToASCII[tapeCode]}'`);
                 /*********************************/
             }
-            break;
-
-        default:                        // Search for instruction sector
+        } else {                        // Search for sector of next instruction.
             if (!this.lastOpEnded) {
                 if (this.tracing) {             // log end of prior instruction
                     this.traceInstruction(1, "End Op");
                 }
 
-                this.lastOpEnded = true;        // prevent end-op processing during rest of search
+                this.lastOpEnded = true;        // prevent end-op tracing during rest of search
                 this.lastOpDiskTime = this.disk.diskTime;
             }
 
@@ -551,10 +565,9 @@ class Processor {
                 if (this.disk.findSector(this.C.value)) {
                     nextPhase = 2;      // instruction sector found
                 } else {
-                    this.K.value = 0;   // instruction sector not found (yet)
+                    this.K.value = 0;   // instruction sector not yet found
                 }
             }
-            break;
         }
 
         await this.disk.stepDisk();
@@ -619,15 +632,14 @@ class Processor {
 
         case Processor.opInput:         // I=INPUT and SHIFT
             if (this.activeIODevice) {  // => Faf, not first P3
-                this.waitingIO = true;
-            } else {                    // initial P3
+                // Just proceed to Phase 4 and shift the received code into A.
+            } else {                    // initial P3 - initiate input
                 this.selectIODevice(this.P.value);
                 this.K.value = this.R.value & Util.wordSignMask;        // 4/6-bit mode
                 this.X.value = 0;       // reset end-input flag (was really set in the next P1)
                 this.P.value = 0;       // reset P in preparation for P4 shift into A
-                if (this.activeIODevice) { // make sure this isn't just a Shift
+                if (this.activeIODevice) { // don't call enableSend if this is just a Shift
                     this.activeIODevice.enableSend(true);               // start input
-                    this.waitingIO = true;
                 }
             }
 
@@ -642,7 +654,7 @@ class Processor {
             break;
 
         default:                        // Search for operand sector
-            this.K.value = 1;           // initialize sector-found flag
+            this.K.value = 1;           // initialize operand sector-found flag
             if (this.disk.findSector(this.R.value)) {
                 nextPhase = 4;
             } else {
@@ -705,6 +717,10 @@ class Processor {
         case Processor.opInput:         // I: Input & Left Shift (4 or 6 bit)
             this.A.value = this.K.value ? ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2)
                                         : ((this.A.value << 6) & Util.fullWordMask) | (this.P.value);
+            this.waitingIODevice = true;
+            if (this.readyForInput.waiting) {
+                this.readyForInput.proceed(0);      // allow receiveInputCode() to proceed
+            }
             break;
 
         case Processor.opDivide:        // D: Divide
@@ -967,6 +983,22 @@ class Processor {
     }
 
     /**************************************/
+    initiateManInputMode() {
+        /* Initiates ManInput mode by setting appropriate flip-flops and telling
+        the Flexowriter to enable sending codes to the Processor */
+
+        this.selectIODevice(Processor.devFlexowriter);
+        this.Q.Q1 = 0;                  // disallow anything except Input
+        this.Q.Q3 = 0;
+        this.Q.Q4 = 0;
+        this.K.value = 1;               // 4-bit mode
+        this.X.value = 0;               // reset end-input flag
+        this.P.value = 0;               // clear P to receive the first code
+        this.waitingIODevice = true;
+        this.activeIODevice.enableSend(false);  // initiate sending, no reader start
+    }
+
+    /**************************************/
     panelClearIO() {
         /* Handles the I/O button on the ControlPanel to clear the A register
         and terminate any in-process I/O. If we are in ManInput mode and the
@@ -989,8 +1021,7 @@ class Processor {
                 } else {
                     // Flexowriter could not be selected when entering
                     // ManInput mode, but now it can.
-                    this.selectIODevice(Processor.devFlexowriter);
-                    this.activeIODevice.enableSend(false);      // initiate input
+                    this.initiateManInputMode();
                     if (this.tracing) {
                         console.log("<Flexowriter selected for ManInput after Cancel I/O>");
                     }
@@ -1025,14 +1056,10 @@ class Processor {
             switch (state) {
             case Processor.modeManInput:        // MANUAL INPUT
                 this.stop();
-                this.Q.Q1 = 0;  // disallow anything except Input
-                this.Q.Q3 = 0;
-                this.Q.Q4 = 0;
                 this.K.value = 1;
                 if (this.activeIODevice !== this.devices.flexowriter) {
                     if (this.activeIODevice === null) {
-                        this.selectIODevice(Processor.devFlexowriter);
-                        this.activeIODevice.enableSend();       // initiate input
+                        this.initiateManInputMode();
                         if (this.tracing) {
                             console.log("<Flexowriter selected for ManInput>");
                         }
