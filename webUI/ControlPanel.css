@@ -261,6 +261,13 @@ LABEL.modeCaptionBL {
     bottom:             22%;
     width:              70%;
     transform:          translate(-50%, 50%)}
+#TimingStatsPanel {
+    position:           absolute;
+    display:            none;
+    left:               16px;
+    bottom:             8px;
+    width:              fit-content;
+    height:             fit-content}
 
 /* Debug Panel */
 
@@ -287,15 +294,13 @@ LABEL.modeCaptionBL {
     color:              white;
     background-color:   #1E8200;
     border:             2px solid #666}
+#DebugPanelDiv DIV {
+    margin-top:         1ex}
 #DebugPanelDiv TABLE {
     width:              100%}
 #DebugPanelDiv H2 {
     margin-top:         0;
     margin-bottom:      4px}
-#DebugMemDumpBtn {
-    position:           relative;
-    left:               50%;
-    transform:          translate(-50%, 0)}
 #DebugPanelControlDiv {
     position:           static;
     width:              100%;

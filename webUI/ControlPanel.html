@@ -138,13 +138,24 @@
             </div>
             <img id=GPLogoBlue src="./resources/General-Precision-Logo-Blue.png">
             <img id=LGP21LogoType src="./resources/GP-LGP-21-LogoType.png">
+
+            <div id=TimingStatsPanel><strong>Stats:</strong>
+                Instr: <span id=InstructionCount>0</span>, <span id=InstructionRate>0</span>/s avg &bull;
+                Delay: <span id=DelayAvg>0</span>ms avg, &#x0394;<span id=DelayDeltaAvg>0</span>ms avg.
+            </div>
         <div>
     </div>
 </div>
 
 <div id=DebugPanelDiv>
     <h2 class=center>Debug Options</h2>
-    <button id=DebugMemDumpBtn type=button>Memory Dump</button>
+    <div>
+        <button id=DebugMemDumpBtn type=button>Memory Dump</button>
+    </div>
+    <div>
+        <input id=ShowTimingStatsCheck type=checkbox value=1>
+        <label for=ShowTimingStatsCheck>Show Timing Statistics
+    </div>
     <div id=DebugPanelControlDiv>
         <button id=DebugCloseBtn>Close Panel</button>
     </div<

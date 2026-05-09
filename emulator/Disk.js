@@ -33,6 +33,7 @@ class RegisterC extends Register {
 
     static addressIncrement = 1 << Util.sectorShift; // value to increment address fields
 
+
     incAddress() {
         /* Increments only the address portion of the register, discarding
         any overflow to achieve address wraparound */
@@ -70,6 +71,8 @@ class Disk {
 
     static minThrottleDelay = Util.minTimeout+1;
                                         // minimum time to accumulate throttling delay, >= 4ms
+    static delayAvgAlpha = 0.001;       // throttling delay average decay factor
+    static delayAvgAlpha1 = 1-Disk.delayAvgAlpha;
     static storageName = "retro-lgp21-Disk-Storage-DB";
     static storageVersion = 1;                          // IndexedDB schema version
     static memoryStore = "Persist";// name of the IDB store for disk persistence
@@ -106,12 +109,15 @@ class Disk {
         this.alertWin = window;
 
         // System timing and synchronization variables.
+        this.avgThrottleDelay = 0;      // average throttling delay, ms
+        this.avgThrottleDelta = 0;      // average throttling delay deviation, ms
         this.eTime = 0;                 // current emulation time, ms
         this.eTimeSliceEnd = 0;         // current timeslice end emulation time, ms
         this.timingActive = false;      // true if clock is running
         this.runTime = 0;               // total accumulated run time, ms
         this.diskTime = 0;              // disk clock in word-times
         this.diskTimer = new Util.Timer();
+        this.stepWait = null;           // Promise used in performance throttling
 
         // Disk storage and track layout.
         this.diskSize = Util.physicalTracks*Util.physicalTrackSize;     // 4096 words
@@ -193,20 +199,28 @@ class Disk {
             throw new Error("Disk stepDisk called during stepping");
         }
 
-        // Determine if it's time slow things down to real time.
-        if ((this.eTime += Util.wordTime) < this.eTimeSliceEnd) {
-            this.stepWait = Promise.resolve();  // i.e., don't wait at all
-        } else {
+        // Determine if it's time delay emulation time until it matches real time.
+        if ((this.eTime += Util.wordTime) > this.eTimeSliceEnd) {
+            const stepStart = performance.now();
+            const delay = this.eTime - stepStart;
             this.eTimeSliceEnd += Disk.minThrottleDelay;
-            this.stepWait = this.diskTimer.delayUntil(this.eTime);
+
+            this.avgThrottleDelay =     // compute average throttling delay.
+                    this.avgThrottleDelay*Disk.delayAvgAlpha1 + delay*Disk.delayAvgAlpha;
+
+            // Set this.stepWait during the delay to catch redundant calls on stepDisk().
+            this.stepWait = this.diskTimer.set(delay);
+            await this.stepWait;
+            this.stepWait = null;
+
+            // Compute the average deviation between requested and actual delay.
+            this.avgThrottleDelta = this.avgThrottleDelta*Disk.delayAvgAlpha1 +
+                    (performance.now() - stepStart - delay)*Disk.delayAvgAlpha;
         }
 
         ++this.diskTime;
         const newL = this.L.inc();
         this.diskIndex = this.track.value*Util.physicalTrackSize + newL;
-
-        await this.stepWait;
-        this.stepWait = null;
     }
 
     /**************************************/

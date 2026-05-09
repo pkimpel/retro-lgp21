@@ -131,6 +131,7 @@ class Flexowriter {
         this.inputQueue = [];           // queue of tape codes waiting for output
         this.nextCycleTime = 0;         // time at which next Flexowriter cycle starts
         this.nextCycleTimer = new Util.Timer(); // Flexowriter cycle timer
+        this.paused = false;            // true if emulation is currently paused
         this.printerLine = 0;
         this.printerCol = 0;
         this.readerActive = false;      // true if tapeReader is currently reading
@@ -298,6 +299,24 @@ class Flexowriter {
     }
 
     /**************************************/
+    startPause(timestamp) {
+        /* Called by Processor to pause the emulation. This will inhibit
+        further dequeuing from the inputQueue */
+
+        this.paused = true;
+    }
+
+    /**************************************/
+    endPause(deltaTime) {
+        /* Called by Processor to resume the emulation. This will resume
+        dequeuing input codes from the inputQueue */
+
+        this.paused = false;
+        ////this.nextCycleTime += deltaTime;
+        this.dequeueInput();
+    }
+
+    /**************************************/
     parseTabStops(text, alertWin) {
         /* Parses a comma-delimited list of 1-relative tab stops. If the list is parsed
         successfully, returns an array of 0-relative tab stop positions; otherwise
@@ -326,7 +345,7 @@ class Flexowriter {
                         tabStops.push(col-1);
                     }
                 }
-            } // for x
+            } // for item
         }
 
         return (copacetic ? tabStops : null);
@@ -524,7 +543,7 @@ class Flexowriter {
         const cyclePeriod = Math.max(Flexowriter.defaultCyclePeriod/Util.timingFactor,
                                      Flexowriter.minCyclePeriod);
 
-        if (this.inputQueue.length > 0) {
+        if (this.inputQueue.length > 0 & !this.paused) {
             const now = performance.now();
             const delta = this.nextCycleTime - now;
             let code = this.inputQueue.shift();

@@ -19,6 +19,7 @@ import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
 import {FlipFlop} from "../emulator/FlipFlop.js";
 import {openPopup} from "./PopupUtil.js";
+import {Disk} from "../emulator/Disk.js";
 import {Processor} from "../emulator/Processor.js";
 
 import {ColoredLamp} from "./ColoredLamp.js";
@@ -64,7 +65,10 @@ class ControlPanel {
     lastETime = 0;                      // last emulation clock value
     lastInstructionCount = 0;           // prior total instruction count (for average)
     lastRunTime = 0;                    // prior total run time (for average), ms
+    emulationPaused = false;            // true => emulation has been paused
+    pauseStartStamp = 0;                // timestamp when the current pause occurred
     runTimeOffset = 0;                  // disk runTime offset for display purposes
+    statsVisible = false;               // true => timing stats visible on panel
 
     /**************************************/
     constructor(context) {
@@ -87,6 +91,7 @@ class ControlPanel {
         this.boundResetTiming = this.resetTiming.bind(this);
         this.boundOpenDebugPanel = this.openDebugPanel.bind(this);
         this.boundToggleTracing = this.toggleTracing.bind(this);
+        this.boundChangeVisibility = this.changeVisibility.bind(this);
         this.boundShutDown = this.shutDown.bind(this);
 
         // Create the Control Panel window
@@ -216,9 +221,17 @@ class ControlPanel {
         this.stopBtn = new ColoredLamp(parent, null, null, "StopBtn", "STOP", "squareButton redButton", "redButtonLit");
         this.startBtn = new ColoredLamp(parent, null, null, "StartBtn", "START", "squareButton", "whiteButtonLit");
 
+        this.iCount = this.$$("InstructionCount");
+        this.iAvgRate = this.$$("InstructionRate");
+        this.delayAvg = this.$$("DelayAvg");
+        this.deltaAvg = this.$$("DelayDeltaAvg");
+
         this.scopePathC = this.$$("ScopeCTrace");
         this.scopePathR = this.$$("ScopeRTrace");
         this.scopePathA = this.$$("ScopeATrace");
+
+        this.statsVisible = this.config.getNode("ControlPanel.ShowTimingStatsCheck") ? true : false;
+        this.$$("TimingStatsPanel").style.display = this.statsVisible ? "block" : "none";
 
         this.window.addEventListener("beforeunload", this.boundBeforeUnload);
         this.window.addEventListener("unload", this.boundPanelUnload);
@@ -227,8 +240,8 @@ class ControlPanel {
         this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
         this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
         this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
-        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing, false);
-        //this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
+        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing);
+        this.context.window.addEventListener("visibilitychange", this.boundChangeVisibility);
 
         // Power up and initialize the system.
         this.startSystem();
@@ -253,6 +266,7 @@ class ControlPanel {
                 this.powerBtn.set(1);
                 this.$$("PowerBtnFX").classList.remove("powerUp");
                 this.$$("PowerBtnFX").style.display = "none";
+                this.lastRunTime = this.processor.disk.runTime;
                 this.resetTiming();             // initialize the run timer
                 this.updatePanel();             // initialize the scope traces
                 this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
@@ -363,20 +377,35 @@ class ControlPanel {
         }
 
         const now = performance.now();
-        let rt = p.disk.runTime;
-        while (rt < 0) {
-            rt += now;
+        let runTime = p.disk.runTime;
+        while (runTime < 0) {
+            runTime += now;
         }
 
-        this.runTime.textContent = ((rt-this.runTimeOffset)/1000).toFixed(2).padStart(9, "0");
+        this.runTime.textContent = ((runTime-this.runTimeOffset)/1000).toFixed(2).padStart(9, "0");
+        const deltaRT = runTime - this.lastRunTime;
+        if (deltaRT) {
+            this.avgInstructionRate = this.avgInstructionRate*Disk.delayAvgAlpha1 +
+                    (p.instructionCount - this.lastInstructionCount)/deltaRT*1000*Disk.delayAvgAlpha;
+            this.lastInstructionCount = p.instructionCount;
+            this.lastRunTime = runTime;
+        }
+
+        if (this.statsVisible) {
+            this.iCount.textContent = p.instructionCount;
+            this.iAvgRate.textContent = this.avgInstructionRate.toFixed(2);
+            this.delayAvg.textContent = p.disk.avgThrottleDelay.toFixed(2);
+            this.deltaAvg.textContent =
+                    `${p.disk.avgThrottleDelta < 0 ? "" : "+"}${p.disk.avgThrottleDelta.toFixed(2)}`;
+        }
 
         this.ioBtn.set(p.activeIODevice ? 1 : 0);
         this.stopBtn.set(p.blocked ? 1 : 0);
         this.startBtn.set(p.blocked ? 0 : 1);
 
-        this.drawScopeTrace(this.scopePathC, ControlPanel.scopeTraceX, ControlPanel.scopeTraceCY, p.C.value & 0x80003FFF); /**DEBUG 100 **/
-        this.drawScopeTrace(this.scopePathR, ControlPanel.scopeTraceX, ControlPanel.scopeTraceRY, p.R.value);              /**DEBUG performance.now() **/
-        this.drawScopeTrace(this.scopePathA, ControlPanel.scopeTraceX, ControlPanel.scopeTraceAY, p.A.value);              /**DEBUG Math.random()*Util.wordMask **/
+        this.drawScopeTrace(this.scopePathC, ControlPanel.scopeTraceX, ControlPanel.scopeTraceCY, p.C.value & 0x80003FFF);
+        this.drawScopeTrace(this.scopePathR, ControlPanel.scopeTraceX, ControlPanel.scopeTraceRY, p.R.value);
+        this.drawScopeTrace(this.scopePathA, ControlPanel.scopeTraceX, ControlPanel.scopeTraceAY, p.A.value);
 
         this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
     }
@@ -465,6 +494,62 @@ class ControlPanel {
                 }
             }
             break;
+        }
+    }
+
+
+    /*******************************************************************
+    *   Visibility & Hidden-tab Management                             *
+    *******************************************************************/
+
+    /**************************************/
+    pauseEmulation() {
+        /* Pauses the emulation at the end of the current execytion phase and
+        saves the state necessary to resume emulation with proper timing later */
+
+        if (this.emulationPaused) {
+            throw new Error("<ERROR> Pause requested during paused state");
+        } else {
+            this.emulationPaused = true;
+            this.pauseStartStamp = performance.now();
+            this.processor.startPause(this.pauseStartStamp);
+            clearTimeout(this.intervalToken);           // stop Control Panel refresh
+            console.debug(`<Emulation paused>  stamp=${this.pauseStartStamp}`);
+        }
+    }
+
+    /**************************************/
+    resumeEmulation() {
+        /* Resumes emulation after it has been paused and restores timing state
+        so that from the emulation timeline it appears that the pause did not
+        occur */
+
+        if (!this.emulationPaused) {
+            throw new Error("<ERROR> Pause resumed when not in paused state");
+        } else {
+            const now = performance.now();
+            const deltaTime = now - this.pauseStartStamp;
+            this.emulationPaused = false;
+            this.lastRunTime += deltaTime;
+            ////this.runTimeOffset += deltaTime;
+            this.processor.endPause(this.pauseStartStamp, deltaTime);
+            this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
+            console.debug(`<Emulation resumed> stamp=${now}, delta=${deltaTime} ms`);
+        }
+    }
+
+    /**************************************/
+    changeVisibility(ev) {
+        /* Called when the visibilitychange event fires to report a change in
+        the visibility of the Home page window. This indicates the the browser
+        may soon severely slow down the application */
+        const doc = this.context.window.document;
+
+        console.debug(`<Visibility Change> hidden=${doc.hidden}, paused=${this.emulationPaused}`);
+        if (this.context.window.document.hidden) {
+            this.pauseEmulation();
+        } else {
+            this.resumeEmulation();
         }
     }
 
@@ -652,19 +737,37 @@ class ControlPanel {
         };
 
         //----------------------------
+        const debugPanelClick = (ev) => {
+            /* Dispatches clicks on the Debug Panel */
+
+            switch (ev.target.id) {
+            case "DebugMemDumpBtn":
+                initiateMemDumpView();
+                break;
+            case "ShowTimingStatsCheck":
+                this.statsVisible = ev.target.checked;
+                this.$$("TimingStatsPanel").style.display = this.statsVisible ? "block" : "none";
+                this.config.putNode("ControlPanel.ShowTimingStatsCheck", this.statsVisible ? 1 : 0);
+                break;
+            case "DebugCloseBtn":
+                closeDebugPanel();
+                break;
+            }
+        };
+
+        //----------------------------
         const closeDebugPanel = (ev) => {
             /* Unwires the local events and closes the debug panel */
 
-            this.$$("DebugCloseBtn").removeEventListener("click", closeDebugPanel);
-            this.$$("DebugMemDumpBtn").removeEventListener("click", initiateMemDumpView);
+            this.$$("DebugPanelDiv").removeEventListener("click", this.boundDebugPanelClick);
             this.$$("DebugPanelDiv").style.display = "none";
         };
 
         //--------Outer Block---------
 
+        this.$$("ShowTimingStatsCheck").checked = this.statsVisible;
         this.$$("DebugPanelDiv").style.display = "block";
-        this.$$("DebugMemDumpBtn").addEventListener("click", initiateMemDumpView);
-        this.$$("DebugCloseBtn").addEventListener("click", closeDebugPanel);
+        this.$$("DebugPanelDiv").addEventListener("click", debugPanelClick);
     }
 
 
@@ -718,7 +821,8 @@ class ControlPanel {
             this.$$("GPLogoTurquoise").removeEventListener("dblclick", this.boundOpenDebugPanel);
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("RunTimerDiv").removeEventListener("dblclick", this.boundResetTiming);
-            this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing, false);
+            this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing);
+            this.context.window.removeEventListener("visibilitychange", this.boundChangeVisibility);
             this.window.removeEventListener("beforeunload", this.boundBeforeUnload);
             this.window.removeEventListener("unload", this.boundPanelUnload);
             this.context.systemShutDown();

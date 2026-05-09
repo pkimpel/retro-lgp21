@@ -117,8 +117,10 @@ class Processor {
         // General emulator state
         this.blocked = true;                            // true if emulation halted
         this.dataWord = 0;                              // last-fetched instruction operand word
+        this.instructionCount = 0                       // number of instructions executed
         this.lastOpDiskTime = 0;                        // emulated time prior op ended, WT (tracing)
         this.lastOpEnded = true;                        // used to detect end-of-op (tracing)
+        this.lastPhase = 0;                             // last phase executed before being blocked
         this.opAddr = 0;                                // address of last-fetched instruction (tracing)
         this.opWord = 0;                                // last-fetched instruction
         this.order = 0;                                 // current instruction op code
@@ -150,7 +152,7 @@ class Processor {
     traceHeading() {
         /* Prints a column heading for trace output */
 
-        console.log("Phase  Desc   WordTime   ΔWT  Sector Addr  TTSS  R reg    Mnemonic  Accumulator/Operand  Indicators");
+        console.log("Phase  Desc   WordTime  \u0394 WT  Sector Addr  TTSS  R reg    Mnemonic  Accumulator/Operand  Indicators");
     }
 
     /**************************************/
@@ -322,7 +324,7 @@ class Processor {
         if (this.activeIODevice === null || this.X.value) {
             result = -1;
         } else {
-            if (!this.waitingIODevice) {        // don't get ahead of our skis
+            if (!this.waitingIODevice) {        // let's not get ahead of our skis...
                 result = await this.readyForInput.wait();
             }
 
@@ -549,6 +551,7 @@ class Processor {
             }
         } else {                        // Search for sector of next instruction.
             if (!this.lastOpEnded) {
+                ++this.instructionCount;
                 if (this.tracing) {             // log end of prior instruction
                     this.traceInstruction(1, "End Op");
                 }
@@ -900,9 +903,10 @@ class Processor {
             this.setPhaseFF(phase);
         } while (!this.blocked);
 
+        this.lastPhase = phase;
         if (!this.lastOpEnded) {
             if (this.tracing) {         // log end of prior instruction
-                this.traceInstruction(0, "End Op");
+                this.traceInstruction(phase, "End Op");
             }
 
             this.lastOpEnded = true;        // prevent end-op processing during rest of search
@@ -947,6 +951,27 @@ class Processor {
 
         if (this.poweredOn && !this.blocked) {
             this.stopRequested = true;
+        }
+    }
+
+    /**************************************/
+    startPause(timestamp) {
+        /* Pauses the emulation by effectively stopping the Processor clock */
+
+        this.blocked = true;            // stop the clock
+        for(let name in this.context.devices) {
+            this.context.devices[name].startPause(timestamp);
+        }
+    }
+
+    /**************************************/
+    endPause(deltaTime) {
+        /* Resumes the emulation after a pause */
+
+        this.lastOpDiskTime += deltaTime;
+        this.run(this.lastPhase > 0 ? this.lastPhase : 1);
+        for (let name in this.context.devices) {
+            this.context.devices[name].endPause(deltaTime);
         }
     }
 
