@@ -1,7 +1,7 @@
 /***********************************************************************
 * retro-lgp21/emulator Disk.js
 ************************************************************************
-* Copyright (c) 2021, Paul Kimpel.
+* Copyright (c) 2026, Paul Kimpel.
 * Licensed under the MIT License, see
 *       http://www.opensource.org/licenses/mit-license.php
 ************************************************************************
@@ -180,7 +180,7 @@ class Disk {
     }
 
     /**************************************/
-    async stepDisk() {
+    stepDisk() {
         /* Steps the disk to its next word-time and updates the emulation
         timing. Returns true if it is time for a throttling delay. Since most
         browsers will force a setTimeout() to wait for a minimum of 4ms, this
