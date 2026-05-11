@@ -60,6 +60,8 @@ class RegisterP extends Register {
 class Processor {
 
     static debugging = false;
+    static statsAlpha = 0.001;            // statistics averaging decay factor
+    static statsAlpha1 = 1-Processor.statsAlpha;
 
     // MODE switch values.
     static modeOneOperation = 0;
@@ -128,6 +130,11 @@ class Processor {
         this.poweredOn = false;                         // powered up and ready to run
         this.stopRequested = false;                     // blocked state pending
         this.tracing = false;                           // trace command debugging
+
+        // Timing and throttline statistics
+        this.avgThrottleDelay = 0;                      // average throttling delay, ms
+        this.avgThrottleDelta = 0;                      // average throttling delay deviation, ms
+        this.stepTimer = new Util.Timer();              // timer used for throttling performance
 
         // UI state from Control Panel
         this.bs4Switch = 0;                             // BS-4 switch
@@ -516,7 +523,7 @@ class Processor {
     *******************************************************************/
 
     /**************************************/
-    async phase1() {
+    phase1() {
         /* Most commonly used to search for the next instruction word on the
         disk as specfied by the track and sector portion of the C register.
         Also used by I/O to delay until input is received or an output device
@@ -557,7 +564,7 @@ class Processor {
                 }
 
                 this.lastOpEnded = true;        // prevent end-op tracing during rest of search
-                this.lastOpDiskTime = this.disk.diskTime;
+                this.lastOpDiskTime = this.disk.diskTime;       // for tracing
             }
 
             this.K.value = 1;           // initialize sector-found flag
@@ -573,12 +580,11 @@ class Processor {
             }
         }
 
-        await this.disk.stepDisk();
         return nextPhase;
     }
 
     /**************************************/
-    async phase2() {
+    phase2() {
         /* Used to load the word at the current disk location to the R register
         in preparation for execution. Also handles conditional skipping by
         switching back to Phase 1 instead of 3 */
@@ -603,12 +609,11 @@ class Processor {
             this.lastOpEnded = true;    // don't trace skipped instructions
         }
 
-        await this.disk.stepDisk();
         return nextPhase;
     }
 
     /**************************************/
-    async phase3() {
+    phase3() {
         /* Most commonly used to search for the current instruction's operand
         location as specified by the track and sector portion of the R register
         and load the order code into the Q register.
@@ -666,12 +671,11 @@ class Processor {
             break;
         }
 
-        await this.disk.stepDisk();
         return nextPhase;
     }
 
     /**************************************/
-    async phase4() {
+    phase4() {
         /* Primary phase for executing the instruction in the the C register as
         loaded into this.order. It is primarily concerned with modifying the A
         register, and usually terminates in one word-time, but some instructions
@@ -826,7 +830,6 @@ class Processor {
             this.senseHalt();           // Z: Sense/Halt (may turn Q1 back on to command a skip)
         }
 
-        await this.disk.stepDisk();
         return nextPhase;
     }
 
@@ -867,55 +870,74 @@ class Processor {
         approximately that of a real LGP-21. We continue to run until a halt or
         blocked condition is detected, which is indicated by this.blocked was
         set true by Phase 1. Exiting this routine stops the emulation */
-        let phase = startPhase;         // current instruction phase
+        let nextPhase = startPhase;     // current instruction nextPhase
 
         this.disk.startTiming();
-        this.setPhaseFF(phase);
+        this.setPhaseFF(nextPhase);
         this.blocked = false;
         if (this.tracing) {
-            console.log(`<Start Emulation> Phase=${phase}, Mode=${this.modeSwitch}`);
+            console.log(`<Start Emulation> Phase=${nextPhase}, Mode=${this.modeSwitch}`);
         }
 
         do {                            // run until blocked
-            switch (phase) {
-            case 1:                     // Phase 1
-                phase = await this.phase1();
+            switch (nextPhase) {
+            case 1:                     // Phase 1, primarily locate next instruction
+                nextPhase = this.phase1();
                 break;
 
-            case 2:                     // Phase 2
-                phase = await this.phase2();
+            case 2:                     // Phase 2, fetch next instruction
+                nextPhase = this.phase2();
                 break;
 
-            case 3:                     // Phase 3
-                phase = await this.phase3();
+            case 3:                     // Phase 3, primarily locate operand location
+                nextPhase = this.phase3();
                 break;
 
-            case 4:                     // Phase 4
-                phase = await this.phase4();
+            case 4:                     // Phase 4, execute instruction
+                nextPhase = this.phase4();
                 break;
 
             default:                    // Error - should never happen
-                console.log(`Invalid Processor phase: ${phase}`);
-                throw new Error("Invalid Processor phase");
+                console.log(`Invalid Processor Phase: ${nextPhase}`);
+                throw new Error("Invalid Processor Phase");
                 break;
             }
 
-            this.setPhaseFF(phase);
-        } while (!this.blocked);
+            // Rotate the disk by one word-time to advance its position and the
+            // emulation clock. If stepDisk returns true, then it's time to
+            // throttle the emulation clock (Disk.eTime) so real time can catch up.
+            if (this.disk.stepDisk()) {
+                const throttleStart = performance.now();
+                const delay = this.disk.eTime - throttleStart;
 
-        this.lastPhase = phase;
-        if (!this.lastOpEnded) {
-            if (this.tracing) {         // log end of prior instruction
-                this.traceInstruction(phase, "End Op");
+                // Update the average requested-delay statistic.
+                this.avgThrottleDelay =
+                        this.avgThrottleDelay*Processor.statsAlpha1 + delay*Processor.statsAlpha;
+
+                // The Pause That Refreshes.
+                await this.stepTimer.set(delay);
+
+                // Update the average deviation between requested and actual delay.
+                this.avgThrottleDelta = this.avgThrottleDelta*Processor.statsAlpha1 +
+                        (performance.now() - throttleStart - delay)*Processor.statsAlpha;
             }
 
-            this.lastOpEnded = true;        // prevent end-op processing during rest of search
-            this.lastOpDiskTime = this.disk.diskTime;
-        }
+            this.setPhaseFF(nextPhase);
+        } while (!this.blocked);
 
+        this.lastPhase = nextPhase;
         this.stopRequested = false;
         this.disk.stopTiming();
         this.updateLampGlow(1);
+        if (!this.lastOpEnded) {
+            if (this.tracing) {         // log end of prior instruction
+                this.traceInstruction(nextPhase, "End Op");
+            }
+
+            this.lastOpEnded = true;        // prevent end-op processing during rest of search
+            this.lastOpDiskTime = this.disk.diskTime;           // for tracing
+        }
+
         if (this.tracing) {
             console.log(`<Stop Emulation>  Mode=${this.modeSwitch}`);
         }

@@ -385,8 +385,8 @@ class ControlPanel {
         this.runTime.textContent = ((runTime-this.runTimeOffset)/1000).toFixed(2).padStart(9, "0");
         const deltaRT = runTime - this.lastRunTime;
         if (deltaRT) {
-            this.avgInstructionRate = this.avgInstructionRate*Disk.delayAvgAlpha1 +
-                    (p.instructionCount - this.lastInstructionCount)/deltaRT*1000*Disk.delayAvgAlpha;
+            this.avgInstructionRate = this.avgInstructionRate*Processor.statsAlpha1 +
+                    (p.instructionCount - this.lastInstructionCount)/deltaRT*1000*Processor.statsAlpha;
             this.lastInstructionCount = p.instructionCount;
             this.lastRunTime = runTime;
         }
@@ -394,9 +394,9 @@ class ControlPanel {
         if (this.statsVisible) {
             this.iCount.textContent = p.instructionCount;
             this.iAvgRate.textContent = this.avgInstructionRate.toFixed(2);
-            this.delayAvg.textContent = p.disk.avgThrottleDelay.toFixed(2);
+            this.delayAvg.textContent = p.avgThrottleDelay.toFixed(2);
             this.deltaAvg.textContent =
-                    `${p.disk.avgThrottleDelta < 0 ? "" : "+"}${p.disk.avgThrottleDelta.toFixed(2)}`;
+                    `${p.avgThrottleDelta < 0 ? "" : "+"}${p.avgThrottleDelta.toFixed(2)}`;
         }
 
         this.ioBtn.set(p.activeIODevice ? 1 : 0);

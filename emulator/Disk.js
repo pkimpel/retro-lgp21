@@ -69,10 +69,8 @@ class RegisterC extends Register {
 
 class Disk {
 
-    static minThrottleDelay = Util.minTimeout+1;
+    static minThrottleDelay = Util.minTimeout*3;
                                         // minimum time to accumulate throttling delay, >= 4ms
-    static delayAvgAlpha = 0.001;       // throttling delay average decay factor
-    static delayAvgAlpha1 = 1-Disk.delayAvgAlpha;
     static storageName = "retro-lgp21-Disk-Storage-DB";
     static storageVersion = 1;                          // IndexedDB schema version
     static memoryStore = "Persist";// name of the IDB store for disk persistence
@@ -109,15 +107,11 @@ class Disk {
         this.alertWin = window;
 
         // System timing and synchronization variables.
-        this.avgThrottleDelay = 0;      // average throttling delay, ms
-        this.avgThrottleDelta = 0;      // average throttling delay deviation, ms
         this.eTime = 0;                 // current emulation time, ms
         this.eTimeSliceEnd = 0;         // current timeslice end emulation time, ms
         this.timingActive = false;      // true if clock is running
         this.runTime = 0;               // total accumulated run time, ms
         this.diskTime = 0;              // disk clock in word-times
-        this.diskTimer = new Util.Timer();
-        this.stepWait = null;           // Promise used in performance throttling
 
         // Disk storage and track layout.
         this.diskSize = Util.physicalTracks*Util.physicalTrackSize;     // 4096 words
@@ -148,7 +142,7 @@ class Disk {
         to determine the current rotational position of the disk. Math.floor()
         is used to compensate for many browsers limiting the precision of
         performance.now() to one millisecond, which can make real time appear
-        to go backwards */
+        to go backwards. Starts the Run Timer */
 
         if (this.timingActive) {
             debugger;
@@ -172,7 +166,7 @@ class Disk {
 
     /**************************************/
     stopTiming() {
-        /* Stops the run timer */
+        /* Stops the Run Timer */
 
         if (!this.timingActive) {
             debugger;
@@ -187,40 +181,24 @@ class Disk {
 
     /**************************************/
     async stepDisk() {
-        /* Steps the disk to its next word-time and updates the timing.
-        Returns either immediately or after a delay to allow browser real time
-        to catch up with the emulation clock, this.eTime. Since most browsers
-        will force a setTimeout() to wait for a minimum of 4ms, this routine
-        will not delay if emulation time has not yet reached the end of its
-        time slice. Does not increment the track */
-
-        // If a step is already in progress, complain.
-        if (this.stepWait) {
-            throw new Error("Disk stepDisk called during stepping");
-        }
-
-        // Determine if it's time delay emulation time until it matches real time.
-        if ((this.eTime += Util.wordTime) > this.eTimeSliceEnd) {
-            const stepStart = performance.now();
-            const delay = this.eTime - stepStart;
-            this.eTimeSliceEnd += Disk.minThrottleDelay;
-
-            this.avgThrottleDelay =     // compute average throttling delay.
-                    this.avgThrottleDelay*Disk.delayAvgAlpha1 + delay*Disk.delayAvgAlpha;
-
-            // Set this.stepWait during the delay to catch redundant calls on stepDisk().
-            this.stepWait = this.diskTimer.set(delay);
-            await this.stepWait;
-            this.stepWait = null;
-
-            // Compute the average deviation between requested and actual delay.
-            this.avgThrottleDelta = this.avgThrottleDelta*Disk.delayAvgAlpha1 +
-                    (performance.now() - stepStart - delay)*Disk.delayAvgAlpha;
-        }
+        /* Steps the disk to its next word-time and updates the emulation
+        timing. Returns true if it is time for a throttling delay. Since most
+        browsers will force a setTimeout() to wait for a minimum of 4ms, this
+        routine will not signal a delay if emulation time has not yet reached
+        the end of its time slice. Does not increment the track number */
+        let paws = false;               // time to throttle
 
         ++this.diskTime;
         const newL = this.L.inc();
         this.diskIndex = this.track.value*Util.physicalTrackSize + newL;
+
+        // Determine if it's time to throttle the emulation until real time catches up.
+        if ((this.eTime += Util.wordTime) > this.eTimeSliceEnd) {
+            paws = true;
+            this.eTimeSliceEnd += Disk.minThrottleDelay;
+        }
+
+        return paws;
     }
 
     /**************************************/

@@ -132,20 +132,20 @@ DIV.redLit {
 
 DIV.blackButton1 {
     position:           absolute;
-    width:              14px;
-    height:             14px;
+    width:              16px;
+    height:             16px;
     font-size:          4px;
     background-image:   radial-gradient(circle, #030, #000);
     border-radius:      50%;
-    border:             10px solid silver}
+    border:             8px solid silver}
 DIV.redButton1 {
     position:           absolute;
-    width:              14px;
-    height:             14px;
+    width:              18px;
+    height:             18px;
     font-size:          4px;
     background-image:   radial-gradient(circle, #F00, #C00);
     border-radius:      50%;
-    border:             10px solid silver}
+    border:             8px solid silver}
 
 IMG.toggleSwitch {
     position:           absolute;
