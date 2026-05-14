@@ -11,4 +11,4 @@
 *   Original version.
 ***********************************************************************/
 
-export const lgp21Version =       "0.10f1";
+export const lgp21Version =       "0.10g";

@@ -41,6 +41,8 @@ class Flexowriter {
                                         // default character period, ms/char
     static minCyclePeriod = 1000/2500;  // minimum character period, ms/char (2500 cps)
     static fastCarriageRate = 64/0.75;  // carriage return/tab speed, col/sec
+    static fastCarriagePeriod = 1000/Flexowriter.fastCarriageRate;
+                                        // default fast carriage period, ms/col
     static windowTop = 550;             // default window top position
     static windowHeight = 456;          // default window innerHeight, pixels
     static windowWidth = 760;           // default window innerWidth, pixels
@@ -282,6 +284,14 @@ class Flexowriter {
     }
 
     /**************************************/
+    calcTiming(basePeriod) {
+        /* Calculates the time period of an operation relative to "basePeriod"
+        and returns the period time. All timing is in terms of milliseconds */
+
+        return Math.max(basePeriod/this.processor.disk.timingFactor, Flexowriter.minCyclePeriod);
+    }
+
+    /**************************************/
     cancel() {
         /* Cancels any input I/O currently in process */
 
@@ -312,7 +322,6 @@ class Flexowriter {
         dequeuing input codes from the inputQueue */
 
         this.paused = false;
-        ////this.nextCycleTime += deltaTime;
         this.dequeueInput();
     }
 
@@ -367,8 +376,7 @@ class Flexowriter {
                 this.enableTypeOMatic();
             } else if (autoStart && this.readerStarted) {
                 // Delay to give Processor time to be ready to receive.
-                const cyclePeriod = Math.max(Flexowriter.defaultCyclePeriod/Util.timingFactor,
-                                             Flexowriter.minCyclePeriod);
+                const cyclePeriod = this.calcTiming(Flexowriter.defaultCyclePeriod);
                 setTimeout(this.boundEnableReader, cyclePeriod);
             }
         }
@@ -518,8 +526,9 @@ class Flexowriter {
             // If the tape reader is enabled, get the next code and enqueue it.
             if (this.readerActive) {
                 // Need to bump nextCycleTime by reader/typewriter speed differential...
-                this.nextCycleTime += cyclePeriod *
-                        (FlexowriterTapeReader.defaultReadPeriod/Flexowriter.defaultCyclePeriod - 1);
+                this.nextCycleTime +=
+                        this.calcTiming(FlexowriterTapeReader.defaultReadPeriod) -
+                        this.calcTiming(Flexowriter.defaultCyclePeriod);
                 code = this.tapeReader.read();
                 if (code < 0) {
                     this.stopTapeRead();        // reader stopped (out of tape?)
@@ -540,10 +549,9 @@ class Flexowriter {
         transmission to the processor. Throttles output speed to the Flexowriter character
         cycle. This routine sets a minimum cycle time, but printCode() and
         friends may increase that according to need */
-        const cyclePeriod = Math.max(Flexowriter.defaultCyclePeriod/Util.timingFactor,
-                                     Flexowriter.minCyclePeriod);
 
         if (this.inputQueue.length > 0 & !this.paused) {
+            const cyclePeriod = this.calcTiming(Flexowriter.defaultCyclePeriod);
             const now = performance.now();
             const delta = this.nextCycleTime - now;
             let code = this.inputQueue.shift();
@@ -554,7 +562,7 @@ class Flexowriter {
             }
 
             if (delta <= 0) {
-                // If nextCycleTime is in the past, resynchronize to the Flexowriter's cycle.
+                // If nextCycleTime is in the past, resynchronize to the Flexowriter's 10 cps cycle.
                 this.nextCycleTime = now - now%cyclePeriod + cyclePeriod;
                 await this.routeInput(code, cyclePeriod);
             } else {
@@ -703,7 +711,7 @@ class Flexowriter {
             return;                     // Type-O-Matic inhibited
         }
 
-        const tomPeriod = 1000/Math.min(Flexowriter.defaultCycleRate*Util.timingFactor, 2500); // ms
+        const tomPeriod = this.calcTiming(Flexowriter.defaultCyclePeriod);      // ms
         let nextKeystrokeStamp = performance.now();
         this.openTypeOMaticPanel();
         this.tomUpperCase = this.upperCase != 0;
@@ -957,8 +965,8 @@ class Flexowriter {
             this.printRed(true);
         }
 
-        this.nextCycleTime += cyclePeriod + (this.printerCol - this.marginLeft)/
-                Flexowriter.fastCarriageRate*cyclePeriod/Flexowriter.defaultCyclePeriod;
+        this.nextCycleTime += cyclePeriod +
+                this.calcTiming((this.printerCol - this.marginLeft)*Flexowriter.fastCarriagePeriod);
         this.setPrinterCol(this.marginLeft);
         ++this.printerLine;
         paper.scrollIntoView(false);
@@ -976,8 +984,9 @@ class Flexowriter {
             }
         } // for x
 
-        this.nextCycleTime += (this.printerCol - Math.min(tabCol, this.columns))/
-                Flexowriter.fastCarriageRate*cyclePeriod/Flexowriter.defaultCyclePeriod;
+        this.nextCycleTime += cyclePeriod +
+                this.calcTiming((Math.min(tabCol, this.columns) - this.printerCol)*
+                                Flexowriter.fastCarriagePeriod);
         while (this.printerCol < tabCol) {
             this.printChar(" ", cyclePeriod);           // output a space
             if (this.printerCol <= this.marginLeft) {
@@ -1115,9 +1124,10 @@ class Flexowriter {
     /**************************************/
     async printCode(code, cyclePeriod) {
         /* Outputs one tape code to the typewriter printer, and if enabled,
-        the paper-tape punch. This routines outputs immediately and unconditionally.
-        The caller must take care of proper timing, but this and its callees can
-        increase the current cycle time as needed */
+        the paper-tape punch. This routine outputs immediately and uncondition-
+        ally. The caller must take care of proper timing and pass "cyclePeriod"
+        to indicate the length of the print cycle, but this routine and its
+        callees can  increase the current cycle period as needed */
         const flexCode = code & 0x3F;
 
         if (Flexowriter.validCodes[flexCode]) {
@@ -1167,11 +1177,12 @@ class Flexowriter {
             if (this.sendActive) {
                 if (code == IOCodes.ioCondStop) {
                     this.disableSend();         // must be done BEFORE sending the code
+                    code = -1;                  // we don't think the Flex actually sends the stop code
                 }
 
                 const result = await this.processor.receiveInputCode(code);
                 if (result) {
-                    console.log(`**Flexowriter: Processor.receiveInputCode returned ${result}`);
+                    console.log(`**Flexowriter: Processor.receiveInputCode(${code}) returned ${result}`);
                 }
             }
         }

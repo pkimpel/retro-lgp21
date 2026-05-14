@@ -69,8 +69,14 @@ class RegisterC extends Register {
 
 class Disk {
 
-    static minThrottleDelay = Util.minTimeout*3;
-                                        // minimum time to accumulate throttling delay, >= 4ms
+    static defaultRPM = 1125;                           // default disk revolution speed, rev/min
+    static maxRPM = Disk.defaultRPM*100;                // maximum disk revolution speed, rev/min
+    static physicalTracks = 32;                         // physical number of tracks on the disk
+    static physicalTrackSize = 128;                     // words in a physical track
+    static logicalTracks = 64;                          // logical (LGP-30) number of tracks on the disk
+    static logicalTrackSize = 64;                       // words in a logical (LGP-30) track
+    static interleaveFactor = 18;                       // physical sector distance beween logical addresses
+    static minThrottleDelay = Util.minTimeout*3;        // minimum time to accumulate throttling delay, >= 4ms
     static storageName = "retro-lgp21-Disk-Storage-DB";
     static storageVersion = 1;                          // IndexedDB schema version
     static memoryStore = "Persist";// name of the IDB store for disk persistence
@@ -101,12 +107,18 @@ class Disk {
     static S2 = 0b00000000000000000011111111111100;     // S2 timing track: address bits, all words
     static S3 = 0b10000000000011110011111000000000;     // S3 timing track: op & track bits, all words
 
+
     constructor() {
         /* Constructor for the LGP-21 disk object, including the disk-based registers */
 
         this.alertWin = window;
 
         // System timing and synchronization variables.
+        this.diskRPM = Disk.defaultRPM; // disk revolution speed, rev/minute
+        this.wordTime = 0;              // one word time on the disk [128 words/rev], ms
+        this.bitTime = 0;               // one bit time on the disk, ms
+        this.diskCycleTime = 0;         // one disk cycle (128 words), ms
+        this.timingFactor = 1;          // global emulator speed factor
         this.eTime = 0;                 // current emulation time, ms
         this.eTimeSliceEnd = 0;         // current timeslice end emulation time, ms
         this.timingActive = false;      // true if clock is running
@@ -114,7 +126,7 @@ class Disk {
         this.diskTime = 0;              // disk clock in word-times
 
         // Disk storage and track layout.
-        this.diskSize = Util.physicalTracks*Util.physicalTrackSize;     // 4096 words
+        this.diskSize = Disk.physicalTracks*Disk.physicalTrackSize;     // 4096 words
         this.diskMem = new Uint32Array(this.diskSize);                  // the memory storage
         this.L = new Register(7, this, false);  // current disk rotational position: word-time 0-127
         this.track = new Register(5, this, false);      // current track number, 0-31
@@ -132,9 +144,11 @@ class Disk {
         this.regAStarLow = new Register(Util.wordBits, this, false);
         this.regAStarHigh = new Register(Util.wordBits, this, false);
 
-        // Restore the disk image from the persistence store.
-        this.openDatabase();
+        // Restore the memory disk image from its persistence store.
+        this.openDatabase();            // initiates restore, which runs asyncronously
+        this.setTiming(Disk.defaultRPM);
     }
+
 
     /**************************************/
     startTiming() {
@@ -153,14 +167,14 @@ class Disk {
                 this.runTime -= now;
             }
 
-            if (Math.floor(now/Util.wordTime) > Math.floor(this.eTime/Util.wordTime)) {
+            if (Math.floor(now/this.wordTime) > Math.floor(this.eTime/this.wordTime)) {
                 this.eTime = now;
             } else {
-                this.eTime += Util.wordTime;
+                this.eTime += this.wordTime;
             }
 
             this.eTimeSliceEnd = this.eTime + Disk.minThrottleDelay;
-            this.L.value = Math.floor(this.eTime/Util.wordTime) % Util.physicalTrackSize;
+            this.L.value = Math.floor(this.eTime/this.wordTime) % Disk.physicalTrackSize;
         }
     }
 
@@ -180,6 +194,19 @@ class Disk {
     }
 
     /**************************************/
+    setTiming(newRPM=Disk.defaultRPM) {
+        /* Computes the disk timing factors from the specified newRPM */
+
+        if (newRPM > 0 && newRPM <= Disk.maxRPM) {
+            this.diskRPM = newRPM;                                      // disk revolution speed, rev/minute
+            this.timingFactor = this.diskRPM/Disk.defaultRPM;           // emulator speed factor
+            this.wordTime = 60000/this.diskRPM/Disk.physicalTrackSize;  // one word time on the disk, ms
+            this.bitTime = this.wordTime/Util.wordBits;                 // one bit time on the disk, ms
+            this.diskCycleTime = this.wordTime*Disk.physicalTrackSize;  // one disk revolution (128 words), ms
+        }
+    }
+
+    /**************************************/
     stepDisk() {
         /* Steps the disk to its next word-time and updates the emulation
         timing. Returns true if it is time for a throttling delay. Since most
@@ -190,10 +217,10 @@ class Disk {
 
         ++this.diskTime;
         const newL = this.L.inc();
-        this.diskIndex = this.track.value*Util.physicalTrackSize + newL;
+        this.diskIndex = this.track.value*Disk.physicalTrackSize + newL;
 
         // Determine if it's time to throttle the emulation until real time catches up.
-        if ((this.eTime += Util.wordTime) > this.eTimeSliceEnd) {
+        if ((this.eTime += this.wordTime) > this.eTimeSliceEnd) {
             paws = true;
             this.eTimeSliceEnd += Disk.minThrottleDelay;
         }
@@ -202,9 +229,32 @@ class Disk {
     }
 
     /**************************************/
+    computeDiskIndex(address) {
+        /* Returns diskMem index for logical address "address", i.e., at the
+        address the Processor uses, not the physical sector location. The
+        address is a simple integer, not the C register format. This calculation
+        looks weird because it has to unravel the 18-word sector interleaving */
+        const logicalSector = address%Disk.logicalTrackSize;
+        const logicalTrack = (address - logicalSector)/Disk.logicalTrackSize;
+        const halfTrack = logicalTrack%2;
+
+        return (logicalSector*Disk.interleaveFactor)%Disk.physicalTrackSize +   // physical track offset
+               (logicalTrack - halfTrack)*Disk.logicalTrackSize +               // physical track start
+               halfTrack;                                                       // logical even/odd track
+    }
+
+    /**************************************/
+    fetchWord(address) {
+        /* Returns the word value at logical address "address", i.e., at the
+        address the Processor uses, not the physical sector location. The
+        address is a simple integer, not the C register format */
+
+        return this.diskMem[this.computeDiskIndex(address)] >>> 0;
+    }
+
+    /**************************************/
     findSector(address) {
-        /*
-        Returns true if the sector portion of "address" matches the current
+        /* Returns true if the sector portion of "address" matches the current
         S1 sector address, which is the logical address of the NEXT physical
         location (L+1) on the disk. Sets this.track from the track portion of
         "address". The address parameter is in the format used by the C and R
@@ -216,7 +266,7 @@ class Disk {
         const targetTrack = (address & Util.trackMask) >>> Util.trackShift;
 
         this.track.value = targetTrack;
-        this.diskIndex = targetTrack*Util.physicalTrackSize + currentLoc;
+        this.diskIndex = targetTrack*Disk.physicalTrackSize + currentLoc;
 
         if ((Disk.S1[currentLoc] & Util.sectorMask) == targetSector) {
             return true;

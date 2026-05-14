@@ -26,9 +26,9 @@ class FlipFlop {
     constructor(clock, invisible) {
         /* Constructor for the generic FlipFlop class. "clock" is a reference to
         the object that maintains the emulation clock, which must support the
-        property "eTime". That property reports the current emulation time in
-        milliseconds. Emulation time is used to compute lamp glow decay and a
-        time-weighted exponential average intensity.
+        properties "eTime" and "bitTime". That property reports the current
+        emulation time in milliseconds. Emulation time is used to compute lamp
+        glow decay and a time-weighted exponential average intensity.
 
         "invisible" should be true if the register does not have a visible
         presence in the UI -- this will inhibit computing average lamp glow
@@ -62,7 +62,7 @@ class FlipFlop {
         let eTime = this.clock.eTime;
 
         if (this.visible) {
-            let alpha = Math.min(Math.max(eTime-this.lastETime, Util.bitTime)/
+            let alpha = Math.min(Math.max(eTime-this.lastETime, this.clock.bitTime)/
                                  FlipFlop.neonPersistence + beta, 1.0);
             this.glow = this.glow*(1.0-alpha) + this.intVal*alpha;
         }

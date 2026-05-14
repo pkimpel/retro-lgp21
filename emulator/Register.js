@@ -24,10 +24,10 @@ class Register {
     constructor(bits, clock, invisible) {
         /* Constructor for the generic Register class. Defines a binary register
         of "bits" bits. "clock" is a reference to the object that maintains the
-        emulation clock, which must support the property "eTime". That property
-        reports the current emulation time in milliseconds. Emulation time is
-        used to compute lamp glow decay and a time-weighted exponential average
-        intensity.
+        emulation clock, which must support the properties "eTime" and "bitTime".
+        That property reports the current emulation time in milliseconds.
+        Emulation time is used to compute lamp glow decay and a time-weighted
+        exponential average intensity.
 
         "invisible" should be true if the register does not have a visible
         presence in the UI -- this will inhibit computing average lamp glow values
@@ -64,7 +64,7 @@ class Register {
         let eTime = this.clock.eTime;
 
         if (this.visible) {
-            let alpha = Math.min(Math.max(eTime-this.lastETime, Util.bitTime)/
+            let alpha = Math.min(Math.max(eTime-this.lastETime, this.clock.bitTime)/
                                  FlipFlop.neonPersistence + beta, 1.0);
             let alpha1 = 1.0-alpha;
             let b = 0;
@@ -132,7 +132,7 @@ class Register {
 
             // Update the lamp glow for the former state.
             if (this.visible) {
-                let alpha = Math.min(Math.max(eTime-this.lastETime, Util.bitTime)/
+                let alpha = Math.min(Math.max(eTime-this.lastETime, this.clock.bitTime)/
                                      FlipFlop.neonPersistence, 1.0);
                 this.glow[bitNr] = this.glow[bitNr]*(1.0-alpha) + bit*alpha;
             }
@@ -155,7 +155,7 @@ class Register {
 
             // Update the lamp glow for the former state.
             if (this.visible) {
-                let alpha = Math.min(Math.max(eTime-this.lastETime, Util.bitTime)/
+                let alpha = Math.min(Math.max(eTime-this.lastETime, this.clock.bitTime)/
                                      FlipFlop.neonPersistence, 1.0);
                 this.glow[bitNr] = this.glow[bitNr]*(1.0-alpha) + bit*alpha;
             }

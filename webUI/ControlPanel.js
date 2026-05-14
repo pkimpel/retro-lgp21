@@ -290,13 +290,6 @@ class ControlPanel {
     }
 
     /**************************************/
-    openDebugPanel(ev) {
-        /* Opens the DebugPanelDiv and wires up its events */
-        const p = this.processor;
-
-    }
-
-    /**************************************/
     toggleTracing(ev) {
         /* Toggles the Processor's tracing option */
         const p = this.processor;
@@ -562,8 +555,8 @@ class ControlPanel {
     openDebugPanel(ev) {
         /* Opens the DebugPanelDiv and wires up its events */
         const p = this.processor;
-        const MM = p.disk.diskMem;
-        const memSize = p.disk.diskSize;
+        const disk = p.disk;
+        const memSize = disk.diskSize;
 
         const hex = (v) => v.toString(16).padStart(8, "0");
 
@@ -639,7 +632,7 @@ class ControlPanel {
             addr = 0;
 
             while (addr < memSize) {
-                word = MM[addr] >>> 0;
+                word = disk.fetchWord(addr);
                 if (word == lastWord) {
                     ++dups;                     // count contiguous zero words
                 } else {
@@ -759,7 +752,7 @@ class ControlPanel {
         const closeDebugPanel = (ev) => {
             /* Unwires the local events and closes the debug panel */
 
-            this.$$("DebugPanelDiv").removeEventListener("click", this.boundDebugPanelClick);
+            this.$$("DebugPanelDiv").removeEventListener("click", debugPanelClick);
             this.$$("DebugPanelDiv").style.display = "none";
         };
 
@@ -816,7 +809,6 @@ class ControlPanel {
 
             this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
             this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
-            //this.$$("GPLogoTurquoise").removeEventListener("dblClick", this.boundOpenDebugPanel);
             this.config.putWindowGeometry(this.window, "ControlPanel");
             this.$$("GPLogoTurquoise").removeEventListener("dblclick", this.boundOpenDebugPanel);
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);

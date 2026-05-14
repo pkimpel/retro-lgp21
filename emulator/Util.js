@@ -14,10 +14,6 @@
 export const wordBits = 32;                     // bits per LGP-21 word
 export const wordMagBits = 30;                  // magnitude bits in a LGP-21 word
 export const wordBytes = 4;                     // bytes per LGP-21 word (32 bits holding 32 bits)
-export const physicalTracks = 32;               // physical number of tracks on the disk
-export const physicalTrackSize = 128;           // words in a physical track
-export const logicalTracks = 64;                // logical (LGP-30) number of tracks on the disk
-export const logicalTrackSize = 64;             // words in a logical (LGP-30) track
 export const minTimeout = 4;                    // browsers will do setTimeout for at least 4ms
 
 export const fullWordMask = 0xFFFFFFFF;         // 32 bits including spacer bit
@@ -32,11 +28,6 @@ export const sectorMask = 0x000001FC;           // address sector bits (7)
 export const sectorShift = 2;                   // bits to shift address field right
 export const addressMask = 0x00003FFC;          // instruction address bits (12)
 
-export const defaultRPM = 1125;                 // default disk revolution speed, rev/min
-export const maxRPM = defaultRPM*100;           // maximum disk revolution speed, rev/min
-export let nonStandardRPM = false;              // true if RPM has been changed from default
-export let diskRPM = defaultRPM;                // disk revolution speed, rev/minute
-
 export const lgp21OpMnem = "ZBYRIDNMPEUTHCAS";  // LGP-21 opcode mnemonics
 
 const hexRex = /[abcdefABCDEF]/g;               // standard hex characters
@@ -47,12 +38,6 @@ const lgp21HexXlate = {                         // the weird undigit glyphs come
         "d": "k", "D": "k",
         "e": "q", "E": "q",
         "f": "w", "F": "w"};
-
-// The following are constants once the disk RPM is determined.
-export let wordTime = 0;                        // one word time on the disk [128 words/rev], ms
-export let bitTime = 0;                         // one bit time on the disk, ms
-export let diskCycleTime = 0;                   // one disk cycle (128 words), ms
-export let timingFactor = 1;                    // global emulator speed factor
 
 
 /**************************************/
@@ -101,27 +86,6 @@ export function lgp21FormatOp(word) {
     return ((bits & wordSignMask) ? "-" : " ") +
            lgp21OpMnem[(bits & orderMask) >>> orderShift] + " " +
            lgp21DecAddress((bits & addressMask) >>> sectorShift);
-}
-
-/**************************************/
-export function setTiming(newRPM=defaultRPM) {
-    /* Computes the disk timing factors from the specified diskRPM (default=1800) */
-
-    if (newRPM >= 0 && newRPM <= maxRPM) {
-        diskRPM = newRPM;                       // disk revolution speed, rev/minute
-        timingFactor = diskRPM/defaultRPM;      // emulator speed factor
-        wordTime = 60000/diskRPM/physicalTrackSize; // one word time on the disk, ms
-        bitTime = wordTime/wordBits;            // one bit time on the disk, ms
-        diskCycleTime = wordTime*physicalTrackSize; // one disk cycle (108 words), ms
-    }
-}
-
-/**************************************/
-export function enableNonStandardTiming(newRPM) {
-    /* Enables non-standrd emulator timing (called by G15.js initialization */
-
-    nonStandardRPM = true;
-    setTiming(newRPM);
 }
 
 
@@ -188,9 +152,3 @@ export class Timer {
         }
     }
 }
-
-/***********************************************************************
-*  Global Initialization Code                                          *
-***********************************************************************/
-
-setTiming(defaultRPM);

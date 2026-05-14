@@ -73,6 +73,24 @@ const globalLoad = (ev) => {
     }
 
     /**************************************/
+    function parseQueryString(context) {
+        /* Parses the query string for the request, looking for known key/value
+        pairs. If found, applies them to the current configuration options */
+        let url = new URL(window.location);
+
+        for (let pair of url.searchParams) {
+            let key = (pair[0] || "").trim().toUpperCase();
+            let val = (pair[1] || "").trim().toUpperCase();
+
+            switch (key) {
+            case "RPM":
+                context.processor.disk.setTiming(parseInt(val, 10) ?? 0);
+                break;
+            }
+        }
+    }
+
+    /**************************************/
     async function systemInitialize() {
         /* Activates the system configuration object (asynchronously) and
         enables the Start and Configure buttons on the window */
@@ -100,7 +118,10 @@ const globalLoad = (ev) => {
         window.addEventListener("beforeunload", beforeUnload);
 
         context.processor = new Processor(context);
+        parseQueryString(context);
+
         context.devices = {};
+        context.devices.flexowriter = new Flexowriter(context);
         //if (config.getNode("PaperTapePunch.hasPaperTapePunch")) {
         //    context.devices.paperPunch = new PaperTapePunch(context);
         //}
@@ -109,7 +130,6 @@ const globalLoad = (ev) => {
         //    context.devices.paperReader = new PaperTapeReader(context);
         //}
 
-        context.devices.flexowriter = new Flexowriter(context);
         context.controlPanel = new ControlPanel(context);
     }
 

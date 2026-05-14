@@ -314,8 +314,8 @@ class Processor {
     async receiveInputCode(code) {
         /* Receives the next I/O code from an input device and loads it into
         the P register. There is special handling for mode ManInput:
-          - For normal input, if the code a COND STOP or negative code
-            (indicating I/O was canceled), terminates the I/O by setting the
+          - For normal input, if the code is a COND STOP or negative code
+            (indicating device has stopped), terminates the I/O by setting the
             activeIODevice to null; if the code is one that does not enter the
             A register, ignores it; otherwise resets waitingIODevice to allow
             Phase 1 to finish and Phase 4 to shift the (rotated) code into the
