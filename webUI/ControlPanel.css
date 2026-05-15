@@ -12,7 +12,7 @@
 ***********************************************************************/
 
 BODY {
-    position:           relative;
+    position:           absolute;
     height:             100%;
     width:              100%;
     background-color:   white;
@@ -306,3 +306,13 @@ LABEL.modeCaptionBL {
     width:              100%;
     margin-top:         8px;
     text-align:         right}
+
+#ControlPanelOverlayFooter {
+    position:           absolute;
+    left:               50%;
+    bottom:             3em;
+    width:              calc(100% - 40em};
+    transform:          translate(-50%, 0);
+    font-weight:        bold;
+    color:              red;
+    text-align:         center}

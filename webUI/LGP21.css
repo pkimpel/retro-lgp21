@@ -12,7 +12,9 @@
 ***********************************************************************/
 
 BODY {
-    position:           relative}
+    position:           relative;
+    margin:             0;
+    padding:            0}
 
 H1 {
     margin-top:         1em;
@@ -36,7 +38,7 @@ H1 {
 #StatusMsg {
     text-align:         center;
     font-size:          85%;
-    color:              blue}
+    color:              red}
 #InfoTable {
     margin-top:         0;
     width:              100%}
@@ -85,3 +87,19 @@ H1 {
     bottom:             0;
     right:              0;
     font-size:          10px}
+
+/* Control panel overlay */
+
+#ControlPanelOverlay {
+    position:           absolute;
+    top:                0;
+    left:               0;
+    width:              100%;
+    height:             100%;
+    display:            block;
+    visibility:         hidden;
+    font-size:          11px;
+    color:              black;
+    background-color:   var(--grecianGrey);
+    user-select:        none;
+    cursor:             default}

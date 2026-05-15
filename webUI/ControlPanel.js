@@ -7,6 +7,10 @@
 ************************************************************************
 * General Precision LGP-21 emulator support class implementing display
 * and behavior for the main control panel.
+*
+* This panel exists as an overlay on the Home page window for the site.
+* It visibility is enabled when the emulator is started (which hides the
+* Home page) and disabled when the emulator is shut down.
 ************************************************************************
 * 2026-03-21  P.Kimpel
 *   Original version, extracted from retro-1620 ControlPanel.js.
@@ -78,81 +82,22 @@ class ControlPanel {
             processor is the Processor object
             systemShutDown() shuts down the emulator
         */
+        let parent = null;              // parent sub-panel DOM object
 
         this.context = context;
+        this.window = context.window;
         this.config = context.config;
-        this.processor = context.processor;
-        this.systemShutdown = context.systemShutdown;
+
+        const $$ = this.$$ = context.$$;
+        const p = this.processor = context.processor;
+        const panel = this.panel = $$("ControlPanel");
 
         this.boundUpdatePanel = this.updatePanel.bind(this);
-        this.boundBeforeUnload = this.beforeUnload.bind(this);
-        this.boundPanelUnload = this.panelUnload.bind(this);
         this.boundControlSwitchClick = this.controlSwitchClick.bind(this);
         this.boundResetTiming = this.resetTiming.bind(this);
         this.boundOpenDebugPanel = this.openDebugPanel.bind(this);
         this.boundToggleTracing = this.toggleTracing.bind(this);
         this.boundChangeVisibility = this.changeVisibility.bind(this);
-        this.boundShutDown = this.shutDown.bind(this);
-
-        // Create the Control Panel window
-        let geometry = this.config.formatWindowGeometry("ControlPanel");
-        if (geometry.length) {
-            [this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop] =
-                    this.config.getWindowGeometry("ControlPanel");
-        } else {
-            this.innerHeight = ControlPanel.windowHeight;
-            this.innerWidth =  ControlPanel.windowWidth;
-            this.windowLeft =  screen.availWidth - ControlPanel.windowWidth;
-            this.windowTop =   0;
-            geometry = `,left=${this.windowLeft},top=${this.windowTop}` +
-                       `,innerWidth=${this.innerWidth},innerHeight=${this.innerHeight}`;
-        }
-
-        openPopup(window, "../webUI/ControlPanel.html", "retro-lgp21.ControlPanel",
-                "location=no,scrollbars,resizable" + geometry,
-                this, this.panelOnLoad);
-    }
-
-    /**************************************/
-    $$(id) {
-        /* Returns a DOM element from its id property. Cannot be called until
-        panelOnLoad is called */
-
-        return this.doc.getElementById(id);
-    }
-
-    /**************************************/
-    alert(msg) {
-        /* Displays an alert from the Control Panel window. This method allows
-        Processor and other components to generate alerts without having direct
-        access to the UI */
-
-        this.window.alert(msg);
-    }
-
-    /**************************************/
-    resetTiming() {
-        /* Double-click handler for the HeaderTable element. Sets this.runTimeOffset
-        to the current Disk.RunTime to zero the display of total run time on the panel */
-        const now = performance.now();
-        let rt = this.processor.disk.runTime;
-
-        while (rt < 0) {
-            rt += now;
-        }
-
-        this.runTimeOffset = rt;
-    }
-
-    /**************************************/
-    panelOnLoad(ev) {
-        /* Initializes the Control Panel window and user interface */
-        const p = this.processor;
-        let parent = null;              // parent sub-panel DOM object
-
-        this.doc = ev.target;
-        this.window = this.doc.defaultView;
-        let body = this.doc.body;
 
         this.$$("LGP21Version").textContent = Version.lgp21Version;
 
@@ -233,22 +178,31 @@ class ControlPanel {
         this.statsVisible = this.config.getNode("ControlPanel.ShowTimingStatsCheck") ? true : false;
         this.$$("TimingStatsPanel").style.display = this.statsVisible ? "block" : "none";
 
-        this.window.addEventListener("beforeunload", this.boundBeforeUnload);
-        this.window.addEventListener("unload", this.boundPanelUnload);
-        this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
-        this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
-        this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
-        this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
-        this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
-        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing);
-        this.context.window.addEventListener("visibilitychange", this.boundChangeVisibility);
-
         // Power up and initialize the system.
         this.startSystem();
+    }
 
-        // Recalculate scaling and offsets after initial window resize.
-        this.config.restoreWindowGeometry(this.window,
-                this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop);
+    /**************************************/
+    alert(msg) {
+        /* Displays an alert from the Control Panel window. This method allows
+        Processor and other components to generate alerts without having direct
+        access to the UI */
+
+        this.window.alert(msg);
+    }
+
+    /**************************************/
+    resetTiming() {
+        /* Double-click handler for the HeaderTable element. Sets this.runTimeOffset
+        to the current Disk.RunTime to zero the display of total run time on the panel */
+        const now = performance.now();
+        let rt = this.processor.disk.runTime;
+
+        while (rt < 0) {
+            rt += now;
+        }
+
+        this.runTimeOffset = rt;
     }
 
     /**************************************/
@@ -412,7 +366,7 @@ class ControlPanel {
         switch (e.id) {
         case "PowerBtn":
             if (ev.type == "dblclick" && p.poweredOn) {
-                this.shutDown();
+                this.context.systemShutDown();
             }
             break;
         case "IOBtn":
@@ -536,10 +490,10 @@ class ControlPanel {
         /* Called when the visibilitychange event fires to report a change in
         the visibility of the Home page window. This indicates the the browser
         may soon severely slow down the application */
-        const doc = this.context.window.document;
+        const doc = this.window.document;
 
         console.debug(`<Visibility Change> hidden=${doc.hidden}, paused=${this.emulationPaused}`);
-        if (this.context.window.document.hidden) {
+        if (this.window.document.hidden) {
             this.pauseEmulation();
         } else {
             this.resumeEmulation();
@@ -765,34 +719,39 @@ class ControlPanel {
 
 
     /*******************************************************************
-    *   Termination                                                    *
+    *   Enable/Disable the Overlay                                     *
     *******************************************************************/
 
     /**************************************/
-    beforeUnload(ev) {
-        const msg = "Closing this window will make the panel unusable.\n" +
-                    "Suggest you stay on the page and minimize this window instead";
+    enablePanel() {
+        /* Enables events and periodic refresh for the Control Panel */
+        let p = this.context.processor;
 
-        ev.preventDefault();
-        ev.returnValue = msg;
-        return msg;
-    }
+        this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
+        this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
+        this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
+        this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
+        this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
+        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing);
+        this.context.window.addEventListener("visibilitychange", this.boundChangeVisibility);
 
-    /**************************************/
-    panelUnload(ev) {
-        /* Event handler for the window unload event */
-
-        this.shutDown();
-    }
-
-    /**************************************/
-    shutDown() {
-        /* Shuts down the panel */
-
-        if (this.intervalToken) {
-            this.window.clearTimeout(this.intervalToken);
-            this.intervalToken = 0;
+        if (p.tracing) {
+            this.$$("LGP21Version").classList.add("active");
+        } else {
+            this.$$("LGP21Version").classList.remove("active");
         }
+
+        this.updatePanel();
+        this.panelEnabled = true;
+        this.$$("ControlPanelOverlay").style.visibility = "visible";
+        if (!this.intervalToken) {
+            this.intervalToken = setInterval(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
+        }
+    }
+
+    /**************************************/
+    disablePanel() {
+        /* Disables events and periodic refresh for the Control Panel */
 
         // Clear the scope.
         this.scopePathC.setAttribute("d", "");
@@ -809,18 +768,18 @@ class ControlPanel {
 
             this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
             this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
-            this.config.putWindowGeometry(this.window, "ControlPanel");
             this.$$("GPLogoTurquoise").removeEventListener("dblclick", this.boundOpenDebugPanel);
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("RunTimerDiv").removeEventListener("dblclick", this.boundResetTiming);
             this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing);
-            this.context.window.removeEventListener("visibilitychange", this.boundChangeVisibility);
-            this.window.removeEventListener("beforeunload", this.boundBeforeUnload);
-            this.window.removeEventListener("unload", this.boundPanelUnload);
-            this.context.systemShutDown();
-            this.window.setTimeout(() => {
-                this.window.close();
-            }, 500);
+            this.window.removeEventListener("visibilitychange", this.boundChangeVisibility);
+
+            this.panelEnabled = false;
+            this.$$("ControlPanelOverlay").style.visibility = "hidden";
+            if (this.intervalToken) {
+                clearInterval(this.intervalToken);
+                this.intervalToken = 0;
+            }
         }, 2000);
     }
 } // class ControlPanel

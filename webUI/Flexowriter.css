@@ -291,7 +291,7 @@ BUTTON.flexoLeverDown {
 #TypewriterPaperFrame {
     position:           absolute;
     top:                112px;
-    bottom:             4px;
+    bottom:             2px;
     left:               0;
     width:              100%;
     min-width:          300px;

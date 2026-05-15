@@ -43,8 +43,8 @@ class Flexowriter {
     static fastCarriageRate = 64/0.75;  // carriage return/tab speed, col/sec
     static fastCarriagePeriod = 1000/Flexowriter.fastCarriageRate;
                                         // default fast carriage period, ms/col
-    static windowTop = 550;             // default window top position
-    static windowHeight = 456;          // default window innerHeight, pixels
+    static windowTop = 512;             // default window top position
+    static windowHeight = 418;          // default window innerHeight, pixels
     static windowWidth = 760;           // default window innerWidth, pixels
 
     static commentRex = /#[^\x0D\x0A]*/g;
