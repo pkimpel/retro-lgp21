@@ -48,6 +48,7 @@ BODY {
     top:                0;
     height:             100%;
     width:              40vw;
+    min-width:          calc(100% - 558px);
     background-color:   var(--turquoise)}
 #ScopeShroud {
     position:           absolute;
@@ -84,8 +85,9 @@ BODY {
 #ControlsFrame {
     position:           absolute;
     top:                0;
-    left:               40vw;
     right:              0;
+    width:              calc(100% - 40vw);
+    max-width:          558px;
     height:             100%;
     border-left:        4px solid silver}
 #GrayFrame {
@@ -222,6 +224,14 @@ LABEL.modeCaptionBL {
         opacity:        1}
     }
 
+#TimingStatsPanel {
+    position:           absolute;
+    display:            none;
+    left:               16px;
+    top:                8px;
+    width:              fit-content;
+    height:             fit-content}
+
 #PowerBtn,
 #PowerBtnFX {
     position:           absolute;
@@ -249,6 +259,7 @@ LABEL.modeCaptionBL {
     left:               84%;
     top:                50%;
     transform:          translate(-50%, -50%)}
+
 #GPLogoBlue {
     position:           absolute;
     left:               12.5%;
@@ -261,13 +272,6 @@ LABEL.modeCaptionBL {
     bottom:             22%;
     width:              70%;
     transform:          translate(-50%, 50%)}
-#TimingStatsPanel {
-    position:           absolute;
-    display:            none;
-    left:               16px;
-    bottom:             8px;
-    width:              fit-content;
-    height:             fit-content}
 
 /* Debug Panel */
 
@@ -306,13 +310,3 @@ LABEL.modeCaptionBL {
     width:              100%;
     margin-top:         8px;
     text-align:         right}
-
-#ControlPanelOverlayFooter {
-    position:           absolute;
-    left:               50%;
-    bottom:             3em;
-    width:              calc(100% - 40em};
-    transform:          translate(-50%, 0);
-    font-weight:        bold;
-    color:              red;
-    text-align:         center}

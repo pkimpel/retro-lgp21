@@ -24,7 +24,6 @@ const globalLoad = (ev) => {
     let statusMsgTimer = 0;             // status message timer control cookie
 
     const context = {
-        $$,
         config,
         systemShutDown,
         window
@@ -74,25 +73,6 @@ const globalLoad = (ev) => {
     }
 
     /**************************************/
-    async function loadControlPanel() {
-        /* Loads the Control Panel markup into its overlay <div> on the home
-        page and enables the panel.
-        Adapted from https://stackoverflow.com/a/17636635, posted by Jay Harris,
-        modified by community. Retrieved 2026-05-14, License - CC BY-SA 4.0 */
-
-        try {
-            const response = await fetch("./ControlPanel.html" /*, options */)
-            const html = await response.text();
-            $$("ControlPanelOverlay").innerHTML = html;
-            console.log("Control Panel markup loaded successfully");
-        } catch(error) {
-            console.error(error);
-            $$("StatusMsg").textContent = `Control Panel markup failed to load: ${error}`;
-            clearStatusMsg(30);
-        }
-    }
-
-    /**************************************/
     function parseQueryString(context) {
         /* Parses the query string for the request, looking for known key/value
         pairs. If found, applies them to the current configuration options */
@@ -118,7 +98,6 @@ const globalLoad = (ev) => {
         const msg = await config.activate();
         configReporter(msg);
 
-        await loadControlPanel();
         $$("StartUpBtn").disabled = false;
         $$("StartUpBtn").addEventListener("click", systemStartup, false);
         $$("StartUpBtn").focus();
@@ -135,17 +114,17 @@ const globalLoad = (ev) => {
 
         $$("StartUpBtn").disabled = true;
         $$("ConfigureBtn").disabled = true;
+        $$("EmulatorFrame").style.visibility = "visible";
 
         window.addEventListener("beforeunload", beforeUnload);
 
         context.processor = new Processor(context);
         parseQueryString(context);
 
-        context.controlPanel = new ControlPanel(context);
-        context.controlPanel.enablePanel();
+        context.controlPanel = new ControlPanel(context, true);
 
         context.devices = {};
-        context.devices.flexowriter = new Flexowriter(context);
+        context.devices.flexowriter = new Flexowriter(context, true);
 
         //if (config.getNode("PaperTapePunch.hasPaperTapePunch")) {
         //    context.devices.paperPunch = new PaperTapePunch(context);
@@ -175,11 +154,11 @@ const globalLoad = (ev) => {
         }
 
         await processor.powerDown();
-        context.controlPanel.disablePanel();
         context.devices = null;
         context.controlPanel = null;
         context.processor = null;
 
+        $$("EmulatorFrame").style.visibility = "hidden";
         $$("StartUpBtn").disabled = false;
         $$("StartUpBtn").focus();
         $$("ConfigureBtn").disabled = false;

@@ -139,15 +139,12 @@ class ThreeWaySwitch {
         switch(true) {
         case e.classList.contains(ThreeWaySwitch.topLeftCaptionClass):
             this.set(ThreeWaySwitch.stateUp);
-            //ev.stopPropagation();
             break;
         case e.classList.contains(ThreeWaySwitch.bottomLeftCaptionClass):
             this.set(ThreeWaySwitch.stateDown);
-            //ev.stopPropagation();
             break;
         case e.classList.contains(ThreeWaySwitch.middleLeftCaptionClass):
             this.set(ThreeWaySwitch.stateOff);
-            //ev.stopPropagation();
             break;
         }
     }

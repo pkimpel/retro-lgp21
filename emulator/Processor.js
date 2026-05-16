@@ -132,9 +132,11 @@ class Processor {
         this.tracing = false;                           // trace command debugging
 
         // Timing and throttline statistics
-        this.avgThrottleDelay = 0;                      // average throttling delay, ms
+        this.avgBusy = 0;                               // fraction of time emulation uses the host CPU
+        this.avgThrottleDelay = Disk.minThrottleDelay;  // average throttling delay, ms
         this.avgThrottleDelta = 0;                      // average throttling delay deviation, ms
         this.stepTimer = new Util.Timer();              // timer used for throttling performance
+        this.throttleStart = 0;                         // start timestamp for a throttling pause
 
         // UI state from Control Panel
         this.bs4Switch = 0;                             // BS-4 switch
@@ -870,7 +872,8 @@ class Processor {
         approximately that of a real LGP-21. We continue to run until a halt or
         blocked condition is detected, which is indicated by this.blocked was
         set true by Phase 1. Exiting this routine stops the emulation */
-        let nextPhase = startPhase;     // current instruction nextPhase
+        let nextPhase = startPhase;             // current instruction nextPhase
+        let busyStart = performance.now();      // for updating this.avgBusy
 
         this.disk.startTiming();
         this.setPhaseFF(nextPhase);
@@ -907,8 +910,8 @@ class Processor {
             // emulation clock. If stepDisk returns true, then it's time to
             // throttle the emulation clock (Disk.eTime) so real time can catch up.
             if (this.disk.stepDisk()) {
-                const throttleStart = performance.now();
-                const delay = this.disk.eTime - throttleStart;
+                this.throttleStart = performance.now();
+                const delay = this.disk.eTime - this.throttleStart;
 
                 // Update the average requested-delay statistic.
                 this.avgThrottleDelay =
@@ -917,9 +920,17 @@ class Processor {
                 // The Pause That Refreshes.
                 await this.stepTimer.set(delay);
 
+                // Update avgBusy and restart the busy timer.
+                const throttleEnd = performance.now();
+                const elapsed = throttleEnd - busyStart;
+                if (elapsed > 0) {
+                    this.avgBusy = this.avgBusy*Processor.statsAlpha1 +
+                            (this.throttleStart-busyStart)/elapsed*Processor.statsAlpha;
+                    busyStart = throttleEnd;
+                }
                 // Update the average deviation between requested and actual delay.
                 this.avgThrottleDelta = this.avgThrottleDelta*Processor.statsAlpha1 +
-                        (performance.now() - throttleStart - delay)*Processor.statsAlpha;
+                        (throttleEnd - this.throttleStart - delay)*Processor.statsAlpha;
             }
 
             this.setPhaseFF(nextPhase);
@@ -991,6 +1002,7 @@ class Processor {
         /* Resumes the emulation after a pause */
 
         this.lastOpDiskTime += deltaTime;
+        this.throttleStart += deltaTime;
         this.run(this.lastPhase > 0 ? this.lastPhase : 1);
         for (let name in this.context.devices) {
             this.context.devices[name].endPause(deltaTime);

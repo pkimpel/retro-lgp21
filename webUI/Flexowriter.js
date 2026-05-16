@@ -12,9 +12,16 @@
 * comes from the keyboard, reader, or processor, or output is to the printer,
 * punch, and/or and processor is controlled locally on the device.
 *
+* This panel exists as an in iframe in an overlay over the Home page
+* window for the site. Its visibility is enabled when the emulator is
+* started (which hides the Home page) and disabled when the emulator is
+* shut down.
 ************************************************************************
 * 2026-04-06  P.Kimpel
 *   Original version, from retro-g15 Typewriter.js and paper-tape devices.
+* 2026-05-15  P.Kimpel
+*   Revised from an independent pop-up window to an iframe overlay on the
+*   Home page.
 ***********************************************************************/
 
 export {Flexowriter};
@@ -24,7 +31,7 @@ import * as IOCodes from "../emulator/IOCodes.js";
 import {FlexoLever} from "./FlexoLever.js";
 import {FlexowriterTapePunch} from "./FlexowriterTapePunch.js";
 import {FlexowriterTapeReader} from "./FlexowriterTapeReader.js";
-import {openPopup} from "./PopupUtil.js";
+import {openPopup, computeTextPitch} from "./WebUIUtil.js";
 
 class Flexowriter {
 
@@ -43,8 +50,8 @@ class Flexowriter {
     static fastCarriageRate = 64/0.75;  // carriage return/tab speed, col/sec
     static fastCarriagePeriod = 1000/Flexowriter.fastCarriageRate;
                                         // default fast carriage period, ms/col
-    static windowTop = 512;             // default window top position
-    static windowHeight = 418;          // default window innerHeight, pixels
+    static windowTop = 492;             // default window top position
+    static windowHeight = 398;          // default window innerHeight, pixels
     static windowWidth = 760;           // default window innerWidth, pixels
 
     static commentRex = /#[^\x0D\x0A]*/g;
@@ -110,38 +117,41 @@ class Flexowriter {
     };
 
 
-    constructor(context) {
+    constructor(context, asIframe) {
         /* Initializes and wires up events for the console typewriter device.
         "context" is an object passing other objects and callback functions from
         the global script:
-            $$() returns an object reference from its id value
             config is the system configuration object
             processor is the Processor object
-        */
+        "asIframe"=true opens the panel in an iframe instead of a pop-up window */
 
         this.context = context;
         this.config = context.config;
+        this.window = null;
+        this.iframe = null;
         this.processor = context.processor;
+
+        // Typewriter configuration & state.
         this.marginLeft = 1;            // typewriter left margin (1-relative)
         this.columns = 132;             // typewriter line length (right margin)
+        this.printerLine = 0;
+        this.printerCol = 0;
         this.upperCase = 0;             // default to lower case
         this.isRed = false;             // printing red currently in effect
         this.tabStops = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,
                         90,95,100,105,110,115,120,125]; // default in case config is bad
 
-        // Input queueing and output timing management
+        // Input queueing and output timing management.
         this.inputQueue = [];           // queue of tape codes waiting for output
         this.nextCycleTime = 0;         // time at which next Flexowriter cycle starts
         this.nextCycleTimer = new Util.Timer(); // Flexowriter cycle timer
         this.paused = false;            // true if emulation is currently paused
-        this.printerLine = 0;
-        this.printerCol = 0;
         this.readerActive = false;      // true if tapeReader is currently reading
         this.readerStarted = false;     // true if tapeReader has been started
         this.writeActive = false;       // true if Processor waiting on its PRINT to finish
         this.sendActive = false;        // true when Processor INPUT is active
 
-        // Keyboard Type-O-Matic buffer controls
+        // Keyboard Type-O-Matic buffer controls.
         this.tomBuffer = "";            // Type-O-Matic keystroke buffer
         this.tomCanceled = false;       // true if Type-O-Matic has been canceled
         this.tomIndex = 0;              // current offset into the Type-O-Matic buffer
@@ -150,6 +160,7 @@ class Flexowriter {
         this.tomUpperCase = false;      // current case state for TOM input
         this.tomTimer = new Util.Timer();
 
+        this.boundPanelOnLoad = this.panelOnLoad.bind(this);
         this.boundBeforeUnload = this.beforeUnload.bind(this);
         this.boundChangeCaseShift = this.changeCaseShift.bind(this);
         this.boundChangeColorShift = this.changeColorShift.bind(this);
@@ -163,23 +174,32 @@ class Flexowriter {
         this.boundToggleManInput = this.toggleManInput.bind(this);
         this.boundTOMPanelClick = this.tomPanelClick.bind(this);
 
-        // Create the Control Panel window
-        let geometry = this.config.formatWindowGeometry("Flexowriter");
-        if (geometry.length) {
-            [this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop] =
-                    this.config.getWindowGeometry("Flexowriter");
+        if (asIframe) {
+            // Create an <iframe> on the Home page window and load the HTML.
+            this.iframe = window.document.createElement("iframe");
+            this.iframe.id = "FlexowriterFrame";
+            this.iframe.addEventListener("load", this.boundPanelOnLoad, {once: true});
+            this.iframe.src = "./Flexowriter.html";
+            window.document.getElementById("EmulatorFrame").appendChild(this.iframe);
         } else {
-            this.innerHeight = screen.availHeight - Flexowriter.windowTop - 64;
-            this.innerWidth =  Flexowriter.windowWidth;
-            this.windowLeft =  screen.availWidth - Flexowriter.windowWidth;
-            this.windowTop =   Flexowriter.windowTop;
-            geometry = `,left=${this.windowLeft},top=${this.windowTop}` +
-                       `,innerWidth=${this.innerWidth},innerHeight=${this.innerHeight}`;
-        }
+            // Create the Flexowriter window.
+            let geometry = this.config.formatWindowGeometry("Flexowriter");
+            if (geometry.length) {
+                [this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop] =
+                        this.config.getWindowGeometry("Flexowriter");
+            } else {
+                this.innerHeight = screen.availHeight - Flexowriter.windowTop - 64;
+                this.innerWidth =  Flexowriter.windowWidth;
+                this.windowLeft =  screen.availWidth - Flexowriter.windowWidth;
+                this.windowTop =   Flexowriter.windowTop;
+                geometry = `,left=${this.windowLeft},top=${this.windowTop}` +
+                           `,innerWidth=${this.innerWidth},innerHeight=${this.innerHeight}`;
+            }
 
-        openPopup(window, "../webUI/Flexowriter.html", "retro-lgp-21.Flexowriter",
-                "location=no,scrollbars,resizable" + geometry,
-                this, this.panelOnLoad);
+            openPopup(window, "../webUI/Flexowriter.html", "retro-lgp-21.Flexowriter",
+                    "location=no,scrollbars,resizable" + geometry,
+                    this, this.panelOnLoad);
+        }
     }
 
     /**************************************/
@@ -196,7 +216,7 @@ class Flexowriter {
         const p = this.processor;
         let parent = null;              // parent sub-panel DOM object
 
-        this.doc = ev.target;           // now we can use this.$$()
+        this.doc = ev.target.contentDocument;   // now we can use this.$$()
         this.window = this.doc.defaultView;
 
         this.platen = this.$$("TypewriterPaper");
@@ -266,9 +286,10 @@ class Flexowriter {
 
         // Wire up Typewriter events.
         this.window.addEventListener("beforeunload", this.boundBeforeUnload);
-        this.doc.body.addEventListener("keydown", this.boundPanelKeydown, false);
-        this.doc.body.addEventListener("paste", this.boundPanelPaste, true);
+        this.context.controlPanel.doc.addEventListener("keydown", this.boundPanelKeydown, false);
+        this.doc.addEventListener("keydown", this.boundPanelKeydown, false);
         this.paperDoc.addEventListener("keydown", this.boundPanelKeydown, false);
+        this.doc.body.addEventListener("paste", this.boundPanelPaste, true);
         this.paperDoc.addEventListener("paste", this.boundPanelPaste, true);
         this.manInputLever.addEventListener("click", this.boundToggleManInput);
         this.punchOnLever.addEventListener("click", this.boundTogglePunchOn);
@@ -278,14 +299,22 @@ class Flexowriter {
         this.$$("TypewriterMenuIcon").addEventListener("click", this.boundMenuClick, false);
         this.$$("TypeOMaticPanel").addEventListener("click", this.boundTOMPanelClick, false);
 
-        // Recalculate scaling and offsets after initial window resize.
-        this.config.restoreWindowGeometry(this.window,
-                this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop);
+        if (this.iframe) {
+            // Size the Flexowriter iframe to this.columns if possible.
+            const pitch = computeTextPitch(this.platen.contentWindow, this.paper);
+            const width = Math.round((this.columns+2)*pitch) + 12;  // allow for scrollbar & frame border
+            this.iframe.style.width = `${width}px`;
+            ////console.log("Flex width: %f, pitch: %f", width, pitch);
+        } else {
+            // Recalculate scaling and offsets after initial window resize.
+            this.config.restoreWindowGeometry(this.window,
+                    this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop);
+        }
     }
 
     /**************************************/
     calcTiming(basePeriod) {
-        /* Calculates the time period of an operation relative to "basePeriod"
+        /* Calculates the duration of an operation relative to "basePeriod"
         and returns the period time. All timing is in terms of milliseconds */
 
         return Math.max(basePeriod/this.processor.disk.timingFactor, Flexowriter.minCyclePeriod);
@@ -295,7 +324,6 @@ class Flexowriter {
     cancel() {
         /* Cancels any input I/O currently in process */
 
-        //this.readerStarted = false;
         this.disableReader();
         this.nextCycleTimer.clear();    // cancel any pending cycle
 
@@ -1321,9 +1349,10 @@ class Flexowriter {
             this.$$("CaseIndicator").removeEventListener("click", this.boundChangeCaseShift, false);
             this.$$("ColorIndicator").removeEventListener("click", this.boundChangeColorShift, false);
             this.window.removeEventListener("beforeunload", this.boundBeforeUnload);
-            this.doc.body.removeEventListener("keydown", this.boundPanelKeydown, false);
-            this.doc.body.removeEventListener("paste", this.boundPanelPaste, true);
+            this.context.controlPanel.doc.removeEventListener("keydown", this.boundPanelKeydown, false);
+            this.doc.removeEventListener("keydown", this.boundPanelKeydown, false);
             this.paperDoc.removeEventListener("keydown", this.boundPanelKeydown, false);
+            this.doc.body.removeEventListener("paste", this.boundPanelPaste, true);
             this.paperDoc.removeEventListener("paste", this.boundPanelPaste, true);
             this.manInputLever.removeEventListener("click", this.boundToggleManInput);
             this.punchOnLever.removeEventListener("click", this.boundTogglePunchOn);
@@ -1344,7 +1373,9 @@ class Flexowriter {
             this.flexowriterPunch = null;
             this.flexowriterReader = null;
 
-            this.window.close();
+            if (!this.iframe) {
+                this.window.close();
+            }
         }
     }
 

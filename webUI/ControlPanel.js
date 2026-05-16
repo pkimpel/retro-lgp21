@@ -6,14 +6,18 @@
 *       http://www.opensource.org/licenses/mit-license.php
 ************************************************************************
 * General Precision LGP-21 emulator support class implementing display
-* and behavior for the main control panel.
+* and behavior for the main control panel and diagnostic oscilloscope.
 *
-* This panel exists as an overlay on the Home page window for the site.
-* It visibility is enabled when the emulator is started (which hides the
-* Home page) and disabled when the emulator is shut down.
+* This panel exists as an in iframe in an overlay over the Home page
+* window for the site. Its visibility is enabled when the emulator is
+* started (which hides the Home page) and disabled when the emulator is
+* shut down.
 ************************************************************************
 * 2026-03-21  P.Kimpel
 *   Original version, extracted from retro-1620 ControlPanel.js.
+* 2026-05-15  P.Kimpel
+*   Revised from an independent pop-up window to an iframe overlay on the
+*   Home page.
 ***********************************************************************/
 
 export {ControlPanel};
@@ -22,7 +26,7 @@ import * as Version from "../emulator/Version.js";
 import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
 import {FlipFlop} from "../emulator/FlipFlop.js";
-import {openPopup} from "./PopupUtil.js";
+import {openPopup} from "./WebUIUtil.js";
 import {Disk} from "../emulator/Disk.js";
 import {Processor} from "../emulator/Processor.js";
 
@@ -34,6 +38,7 @@ class ControlPanel {
 
     // Static class properties
 
+    static defaultMsgTimeout = 5;       // for setResultMsg()
     static displayAlpha = 0.01;         // running average decay factor
     static displayRefreshPeriod = 50;   // ms
     static lampFreezeThreshold = FlipFlop.lampPersistence*2;
@@ -64,45 +69,94 @@ class ControlPanel {
     window = null;                      // window object
 
     // Performance stats
-    avgInstructionRate = 0;             // running average instructions/sec
+    avgInstructionRate = 30;            // running average instructions/sec (starting with a reasonable value)
     intervalToken = 0;                  // panel refresh timer cancel token
     lastETime = 0;                      // last emulation clock value
     lastInstructionCount = 0;           // prior total instruction count (for average)
     lastRunTime = 0;                    // prior total run time (for average), ms
     emulationPaused = false;            // true => emulation has been paused
     pauseStartStamp = 0;                // timestamp when the current pause occurred
+    resultMsgTimeoutToken = 0;          // for setResultMsg() use
     runTimeOffset = 0;                  // disk runTime offset for display purposes
     statsVisible = false;               // true => timing stats visible on panel
 
+
     /**************************************/
-    constructor(context) {
+    constructor(context, asIframe) {
         /* Constructs the LGP-21 control panel controls and wires up their events.
         "context" is an object passing other objects and callback functions from
         the global script:
             processor is the Processor object
             systemShutDown() shuts down the emulator
-        */
-        let parent = null;              // parent sub-panel DOM object
+        "asIframe"=true opens the panel in an iframe instead of a pop-up window */
 
         this.context = context;
-        this.window = context.window;
         this.config = context.config;
-
-        const $$ = this.$$ = context.$$;
-        const p = this.processor = context.processor;
-        const panel = this.panel = $$("ControlPanel");
+        this.window = null;
+        this.iframe = null;
+        this.processor = context.processor;
+        this.systemShutdown = context.systemShutdown;
 
         this.boundUpdatePanel = this.updatePanel.bind(this);
+        this.boundBeforeUnload = this.beforeUnload.bind(this);
+        this.boundPanelOnLoad = this.panelOnLoad.bind(this);
+        this.boundPanelUnload = this.panelUnload.bind(this);
         this.boundControlSwitchClick = this.controlSwitchClick.bind(this);
         this.boundResetTiming = this.resetTiming.bind(this);
         this.boundOpenDebugPanel = this.openDebugPanel.bind(this);
         this.boundToggleTracing = this.toggleTracing.bind(this);
         this.boundChangeVisibility = this.changeVisibility.bind(this);
+        this.boundShutDown = this.shutDown.bind(this);
+
+        if (asIframe) {
+            // Create an <iframe> on the Home page window and load the HTML.
+            this.iframe = window.document.createElement("iframe");
+            this.iframe.id = "ControlPanelFrame";
+            this.iframe.addEventListener("load", this.boundPanelOnLoad, {once: true});
+            this.iframe.src = "./ControlPanel.html";
+            window.document.getElementById("EmulatorFrame").appendChild(this.iframe);
+        } else {
+            // Create the Control Panel window
+            let geometry = this.config.formatWindowGeometry("ControlPanel");
+            if (geometry.length) {
+                [this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop] =
+                        this.config.getWindowGeometry("ControlPanel");
+            } else {
+                this.innerHeight = ControlPanel.windowHeight;
+                this.innerWidth =  ControlPanel.windowWidth;
+                this.windowLeft =  screen.availWidth - ControlPanel.windowWidth;
+                this.windowTop =   0;
+                geometry = `,left=${this.windowLeft},top=${this.windowTop}` +
+                           `,innerWidth=${this.innerWidth},innerHeight=${this.innerHeight}`;
+            }
+
+            openPopup(window, "../webUI/ControlPanel.html", "retro-lgp21.ControlPanel",
+                    "location=no,scrollbars,resizable" + geometry,
+                    this, this.panelOnLoad);
+        }
+    }
+
+    /**************************************/
+    $$(id) {
+        /* Returns a DOM element from its id property. Cannot be called until
+        panelOnLoad is called */
+
+        return this.doc.getElementById(id);
+    }
+
+    /**************************************/
+    panelOnLoad(ev) {
+        /* Initializes the Control Panel window and user interface */
+        const p = this.processor;
+        let parent = null;              // parent sub-panel DOM object
+
+        this.doc = ev.target.contentDocument;   // now we can use this.$$
+        this.window = this.doc.defaultView;
 
         this.$$("LGP21Version").textContent = Version.lgp21Version;
 
+        // Configure the switch frame.
         parent = this.$$("SwitchFrame");
-        this.runTime = this.$$("RunTime");
 
         this.bs4Switch = new ToggleSwitch(parent, null, null, "BS4Switch", "bs4Switch",
                         ControlPanel.downSwitchImage, ControlPanel.upSwitchImage);
@@ -158,6 +212,7 @@ class ControlPanel {
         this.modeSwitch.set(this.config.getNode("ControlPanel.modeSwitch"));
         // Mode Switch state will be set after power-on to get Man Input effects.
 
+        // Configure the button/lamp frame.
         parent = this.$$("ButtonFrame");
 
         this.powerBtn = new ColoredLamp(parent, null, null, "PowerBtn", "POWER", "squareButton", "whiteButtonLit");
@@ -166,43 +221,40 @@ class ControlPanel {
         this.stopBtn = new ColoredLamp(parent, null, null, "StopBtn", "STOP", "squareButton redButton", "redButtonLit");
         this.startBtn = new ColoredLamp(parent, null, null, "StartBtn", "START", "squareButton", "whiteButtonLit");
 
+        // Set up the performance statistics and 'scope references.
+        this.runTime = this.$$("RunTime");
         this.iCount = this.$$("InstructionCount");
         this.iAvgRate = this.$$("InstructionRate");
+        this.busyRate = this.$$("BusyRate");
         this.delayAvg = this.$$("DelayAvg");
         this.deltaAvg = this.$$("DelayDeltaAvg");
+
+        this.statsVisible = this.config.getNode("ControlPanel.ShowTimingStatsCheck") ? true : false;
+        this.$$("TimingStatsPanel").style.display = this.statsVisible ? "block" : "none";
 
         this.scopePathC = this.$$("ScopeCTrace");
         this.scopePathR = this.$$("ScopeRTrace");
         this.scopePathA = this.$$("ScopeATrace");
 
-        this.statsVisible = this.config.getNode("ControlPanel.ShowTimingStatsCheck") ? true : false;
-        this.$$("TimingStatsPanel").style.display = this.statsVisible ? "block" : "none";
+        // Wire up the events.
+        this.doc.addEventListener("beforeunload", this.boundBeforeUnload);
+        this.doc.addEventListener("pagehide", this.boundPanelUnload);
+        this.doc.addEventListener("visibilitychange", this.boundChangeVisibility);
+        this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
+        this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
+        this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
+        this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
+        this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
+        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing);
 
         // Power up and initialize the system.
         this.startSystem();
-    }
 
-    /**************************************/
-    alert(msg) {
-        /* Displays an alert from the Control Panel window. This method allows
-        Processor and other components to generate alerts without having direct
-        access to the UI */
-
-        this.window.alert(msg);
-    }
-
-    /**************************************/
-    resetTiming() {
-        /* Double-click handler for the HeaderTable element. Sets this.runTimeOffset
-        to the current Disk.RunTime to zero the display of total run time on the panel */
-        const now = performance.now();
-        let rt = this.processor.disk.runTime;
-
-        while (rt < 0) {
-            rt += now;
+        if (!this.iframe) {
+            // Recalculate scaling and offsets after initial window resize.
+            this.config.restoreWindowGeometry(this.window,
+                    this.innerWidth, this.innerHeight, this.windowLeft, this.windowTop);
         }
-
-        this.runTimeOffset = rt;
     }
 
     /**************************************/
@@ -244,11 +296,63 @@ class ControlPanel {
     }
 
     /**************************************/
+    alert(msg) {
+        /* Displays an alert from the Control Panel window. This method allows
+        Processor and other components to generate alerts without having direct
+        access to the UI */
+
+        this.window.alert(msg);
+    }
+
+    /**************************************/
+    resetResultMsg() {
+        /* Removes the ResultMsg div from the DOM */
+        const e = this.$$("#ResultMsg");
+
+        if (this.resultMsgTimeoutToken) {
+            clearTimeout(this.resultMsgTimeoutToken);
+            this.resultMsgTimeoutToken = 0;
+        }
+
+        if (e) {
+            e.parentNode.removeChild(e);
+        }
+    }
+
+    /**************************************/
+    setResultMsg(text, seconds=ControlPanel.defaultMsgTimeout) {
+        /* Createes and sets the text of the ResultMsg div and initiates
+        the fader styling */
+        const div = this.doc.createElement("div");
+
+        this.resetResultMsg();
+        div.id = "ResultMsg";
+        div.className = "resultMsg fadeMsg";
+        div.textContent = text;
+        div.style.animationDuration = `${seconds}s`;
+        div.style.display = "block";
+        this.doc.body.appendChild(div);
+        this.resultMsgTimeoutToken = setTimeout(this.boundResetResultMsg, seconds*1000);
+    }
+
+    /**************************************/
+    resetTiming() {
+        /* Double-click handler for the HeaderTable element. Sets this.runTimeOffset
+        to the current Disk.RunTime to zero the display of total run time on the panel */
+        const now = performance.now();
+        let rt = this.processor.disk.runTime;
+
+        while (rt < 0) {
+            rt += now;
+        }
+
+        this.runTimeOffset = rt;
+    }
+
+    /**************************************/
     toggleTracing(ev) {
         /* Toggles the Processor's tracing option */
         const p = this.processor;
-
-        //this.$$("FrontPanel").focus();  // de-select the version <div>
 
         p.tracing = !p.tracing;
         if (p.tracing) {
@@ -341,6 +445,7 @@ class ControlPanel {
         if (this.statsVisible) {
             this.iCount.textContent = p.instructionCount;
             this.iAvgRate.textContent = this.avgInstructionRate.toFixed(2);
+            this.busyRate.textContent = (p.avgBusy*100).toFixed(2);
             this.delayAvg.textContent = p.avgThrottleDelay.toFixed(2);
             this.deltaAvg.textContent =
                     `${p.avgThrottleDelta < 0 ? "" : "+"}${p.avgThrottleDelta.toFixed(2)}`;
@@ -366,14 +471,18 @@ class ControlPanel {
         switch (e.id) {
         case "PowerBtn":
             if (ev.type == "dblclick" && p.poweredOn) {
-                this.context.systemShutDown();
+                this.shutDown();
             }
             break;
         case "IOBtn":
             p.panelClearIO();
             break;
         case "StartBtn":                // Note: StopBtn is just a lamp
-            p.start();
+            if (this.emulationPaused) {
+                this.resumeEmulation();         // Firefox window minimization bug
+            } else {
+                p.start();
+            }
             break;
 
         case "BS4Switch":
@@ -478,9 +587,9 @@ class ControlPanel {
             const deltaTime = now - this.pauseStartStamp;
             this.emulationPaused = false;
             this.lastRunTime += deltaTime;
-            ////this.runTimeOffset += deltaTime;
             this.processor.endPause(this.pauseStartStamp, deltaTime);
             this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
+            this.setResultMsg("Emulation resumed after browser hidden-page throttling", 7);
             console.debug(`<Emulation resumed> stamp=${now}, delta=${deltaTime} ms`);
         }
     }
@@ -491,11 +600,12 @@ class ControlPanel {
         the visibility of the Home page window. This indicates the the browser
         may soon severely slow down the application */
         const doc = this.window.document;
+        const state = doc.visibilityState;
 
-        console.debug(`<Visibility Change> hidden=${doc.hidden}, paused=${this.emulationPaused}`);
-        if (this.window.document.hidden) {
+        console.debug(`<Visibility Change> visibility=${state}, paused=${this.emulationPaused}`);
+        if (state == "hidden") {
             this.pauseEmulation();
-        } else {
+        } else if (this.emulationPaused) {
             this.resumeEmulation();
         }
     }
@@ -719,39 +829,34 @@ class ControlPanel {
 
 
     /*******************************************************************
-    *   Enable/Disable the Overlay                                     *
+    *   Termination                                                    *
     *******************************************************************/
 
     /**************************************/
-    enablePanel() {
-        /* Enables events and periodic refresh for the Control Panel */
-        let p = this.context.processor;
+    beforeUnload(ev) {
+        const msg = "Closing this window will make the panel unusable.\n" +
+                    "Suggest you stay on the page and minimize this window instead";
 
-        this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
-        this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
-        this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
-        this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
-        this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
-        this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing);
-        this.context.window.addEventListener("visibilitychange", this.boundChangeVisibility);
-
-        if (p.tracing) {
-            this.$$("LGP21Version").classList.add("active");
-        } else {
-            this.$$("LGP21Version").classList.remove("active");
-        }
-
-        this.updatePanel();
-        this.panelEnabled = true;
-        this.$$("ControlPanelOverlay").style.visibility = "visible";
-        if (!this.intervalToken) {
-            this.intervalToken = setInterval(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
-        }
+        ev.preventDefault();
+        ev.returnValue = msg;
+        return msg;
     }
 
     /**************************************/
-    disablePanel() {
-        /* Disables events and periodic refresh for the Control Panel */
+    panelUnload(ev) {
+        /* Event handler for the window unload event */
+
+        this.shutDown();
+    }
+
+    /**************************************/
+    shutDown() {
+        /* Shuts down the panel */
+
+        if (this.intervalToken) {
+            this.window.clearTimeout(this.intervalToken);
+            this.intervalToken = 0;
+        }
 
         // Clear the scope.
         this.scopePathC.setAttribute("d", "");
@@ -766,19 +871,22 @@ class ControlPanel {
             this.$$("PowerBtnFX").classList.remove("powerDown");
             this.$$("PowerBtnFX").style.display = "none";
 
-            this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
-            this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
+            this.doc.removeEventListener("beforeunload", this.boundBeforeUnload);
+            this.doc.removeEventListener("pagehide", this.boundPanelUnload);
+            this.doc.removeEventListener("visibilitychange", this.boundChangeVisibility);
+            this.config.putWindowGeometry(this.window, "ControlPanel");
             this.$$("GPLogoTurquoise").removeEventListener("dblclick", this.boundOpenDebugPanel);
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("RunTimerDiv").removeEventListener("dblclick", this.boundResetTiming);
+            this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing);
-            this.window.removeEventListener("visibilitychange", this.boundChangeVisibility);
+            this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
+            this.context.systemShutDown();
 
-            this.panelEnabled = false;
-            this.$$("ControlPanelOverlay").style.visibility = "hidden";
-            if (this.intervalToken) {
-                clearInterval(this.intervalToken);
-                this.intervalToken = 0;
+            if (!this.iframe) {
+                this.window.setTimeout(() => {
+                    this.window.close();
+                }, 500);
             }
         }, 2000);
     }

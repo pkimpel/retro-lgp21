@@ -17,7 +17,7 @@
 
 export {SystemConfig};
 
-import {openPopup} from "./PopupUtil.js";
+import {openPopup} from "./WebUIUtil.js";
 
 class SystemConfig {
 
@@ -565,7 +565,7 @@ class SystemConfig {
             this.$$("CancelBtn").removeEventListener("click", this.boundWindowClose, false);
             this.$$("DefaultsBtn").removeEventListener("click", this.boundSetDefaultConfig, false);
             this.$$("configDiv").removeEventListener("change", this.boundChangeConfig, false);
-            this.window.removeEventListener("unload", this.boundCloseConfigUI, false);
+            this.window.removeEventListener("pagehide", this.boundCloseConfigUI, false);
         }
 
         if (this.window) {
@@ -596,7 +596,7 @@ class SystemConfig {
             this.$$("CancelBtn").addEventListener("click", this.boundWindowClose, false);
             this.$$("DefaultsBtn").addEventListener("click", this.boundSetDefaultConfig, false);
             this.$$("configDiv").addEventListener("change", this.boundChangeConfig, false);
-            this.window.addEventListener("unload", this.boundCloseConfigUI, false);
+            this.window.addEventListener("pagehide", this.boundCloseConfigUI, false);
             this.loadConfigDialog();
         }
 

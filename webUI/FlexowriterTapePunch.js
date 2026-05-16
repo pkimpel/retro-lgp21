@@ -20,7 +20,7 @@ export {FlexowriterTapePunch};
 import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
 import {Flexowriter} from "./Flexowriter.js";
-import {openPopup} from "./PopupUtil.js";
+import {openPopup, computeTextPitch} from "./WebUIUtil.js";
 
 
 class FlexowriterTapePunch {
@@ -86,29 +86,13 @@ class FlexowriterTapePunch {
         without overflow (Chrome doesn't properly display text that exceeds the
         size of a right-justified text box). Adapted from retro-1620 and
         https://www.geeksforgeeks.org/calculate-the-width-of-the-text-in-javascript/ */
-        const getCssStyle = (e, prop) => {
-            return this.window.getComputedStyle(e, null).getPropertyValue(prop);
-        }
 
-        // Determine the current font properties for TapeView.
-        const fontWeight = getCssStyle(this.tapeView, 'font-weight') || 'normal';
-        const fontSize = getCssStyle(this.tapeView, 'font-size') || '12px';
-        const fontFamily = getCssStyle(this.tapeView, 'font-family') || 'monospace';
+        const pitch = computeTextPitch(this.window, this.tapeView);
+        this.tapeViewLength = Math.floor(this.tapeView.clientWidth/pitch);
 
-        // Create a temporary Canvas element and set its font.
-        const canvas = document.createElement("canvas");
-        const dc = canvas.getContext("2d");
-        const fontSpecs = `${fontWeight} ${fontSize} ${fontFamily}`;
-        dc.font = fontSpecs;
+        //console.debug("PTView Resize: avg pitch %s, sample length %i, TV width %i = TVLength %i",
+        //          pitch.toFixed(3), sampleText.length, this.tapeView.clientWidth, this.tapeViewLength);
 
-        // Compute the width of some sample text and from that the number of
-        // characters that will fit in the TapeView box.
-        const sample = ("ABCDEFGHIJKLMNOPQRSTUVWXYZ.(-+;/.,'*_ (0123456789|)");
-        const textSpecs = dc.measureText(sample);
-        const sampleWidth = textSpecs.width;
-        this.tapeViewLength = Math.floor(sample.length/sampleWidth*this.tapeView.clientWidth);
-        //console.debug("PT Resize: font specs %s, sample length %i / width %f * TV width %i = TVLength %i",
-        //          fontSpecs, sample.length, sampleWidth, this.tapeView.clientWidth, this.tapeViewLength);
         if (this.tapeView.value.length > this.tapeViewLength) {
             this.tapeView.value = this.tapeView.value.slice(-this.tapeViewLength);
         }

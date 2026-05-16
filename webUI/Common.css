@@ -47,7 +47,7 @@ HTML {
     height:             100%;
     --gpBlue:           #699BCD;
     --turquoise:        #44CCDD;                /* was #55DDEE, officially it's #30D5C8 */
-    --grecianGrey:      #dacfbe;
+    --grecianGrey:      #B3AE9F;                /* was #dacfbe */
     --darkGrey:         #666666;
     --offWhite:         #F9F9F9}
 
@@ -100,7 +100,7 @@ DIV.paper {
     margin-bottom:      0;
     font-size:          11pt;
     line-height:        12pt;
-    overflow:           hidden}
+    overflow:           visible}
 DIV.paper .printRed {
     color:              red}
 
@@ -256,3 +256,35 @@ BUTTON.redButtonLit {
     background: linear-gradient(-45deg, #a2a2a2 0%, #e2e2e2 49%, #a2a2a2 100%)}
 .red {
     color:              red}
+
+/* For use by setResultMsg() */
+.resultMsg {
+    position:           fixed;
+    display:            none;
+    top:                33%;
+    left:               50%;
+    max-width:          30em;
+    transform:          translate(-50%, 0);
+    z-index:            99;
+    padding:            16px;
+    opacity:            0;
+    text-align:         left;
+    font-size:          14px;
+    background-color:   #FFC;
+    color:              red;
+    border-radius:      16px;
+    border:             2px solid red;
+    box-shadow:         10px 10px 10px black}
+.fadeMsg {
+    animation-name:     fadeAway;
+    animation-duration: 6s;
+    animation-timing-function: linear;
+    animation-fill-mode:forwards}
+@keyframes fadeAway {
+    from {
+        opacity:        1}
+    67% {
+        opacity:        1}
+    to {
+        opacity:        0}
+    }
