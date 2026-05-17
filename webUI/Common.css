@@ -230,6 +230,46 @@ BUTTON.redButton {
 BUTTON.redButtonLit {
     background-image:   radial-gradient(#F00 50%, #D00 75%, #900)}
 
+TABLE.normal, TABLE.standard {
+    border-collapse:    collapse}
+
+TABLE.normal>TBODY>TR>TD, TABLE.standard>TBODY>TR>TD {
+    padding-top:        2px;
+    padding-bottom:     2px;
+    padding-left:       2px;
+    padding-right:      2px}
+
+TABLE.normal.padded>TBODY>TR>TD, TABLE.standard.padded>TBODY>TR>TD {
+    padding-left:       4px;
+    padding-right:      4px}
+
+TABLE.standard>THEAD>TR>TH, TABLE.standard>TBODY>TR>TD {
+    font-size:          small}
+
+TABLE.standard>THEAD>TR>TH, TABLE.normal>THEAD>TR>TH {
+    vertical-align:     bottom;
+    text-align:         center;
+    padding-left:       0.5ex;
+    padding-right:      0.5ex;
+    font-weight:        bold}
+
+TABLE.border>THEAD>TR>TH, TABLE.border>TBODY>TR>TD {
+    border:             1px solid #CCC}
+
+TABLE>TBODY.altShading>TR:nth-child(even) {
+    background-color:   #CFC}
+
+TABLE.verticalRule>THEAD>TR>TH, TABLE.verticalRule>TBODY>TR>TD {
+    border-left:        1px solid #999;
+    border-right:       1px solid #999}
+TABLE>TBODY>TR>TD.bottomBorder {
+    border-bottom:      1px solid #999}
+
+TR {
+    vertical-align:     top}
+TR.middle {
+    vertical-align:     middle}
+
 .annunciator {
     visibility:         hidden;
     white-space:        nowrap;
@@ -252,7 +292,6 @@ BUTTON.redButtonLit {
     font-family:        DejaVuSansMonoBookWeb, monospace;
     text-align:         right}
 .brushedStainless {
-    background-color: #a2a2a2;
     background: linear-gradient(-45deg, #a2a2a2 0%, #e2e2e2 49%, #a2a2a2 100%)}
 .red {
     color:              red}

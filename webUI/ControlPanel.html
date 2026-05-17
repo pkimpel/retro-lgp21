@@ -29,7 +29,7 @@
 <div id=LogoRow class=brushedStainless>
     <img id=GPLogoTurquoise src="./resources/General-Precision-Logo-Turquoise.png"
          alt="General Precision Logo"
-         title="DOUBLE-click to open the Debug Panel">
+         title="DOUBLE-click to open the Diagnostic Panel">
     <img id=LGP21Logo src="./resources/LGP-21-Logo.png" alt="LGP-21 Logo">
 </div>
 
@@ -150,16 +150,35 @@
 
 <div id=DebugPanelDiv>
     <h2 class=center>Diagnostic Panel</h2>
-    <div>
-        <button id=DebugMemDumpBtn type=button>Memory Dump</button>
-    </div>
-    <div>
-        <input id=ShowTimingStatsCheck type=checkbox value=1>
-        <label for=ShowTimingStatsCheck>Show Timing Statistics
-    </div>
+
+    <table class=normal>
+    <tbody>
+        <tr>
+            <td colspan=2>
+                <button id=DebugMemDumpBtn type=button>Memory Dump</button>
+        <tr>
+            <td colspan=2>
+                <input id=ShowTimingStatsCheck type=checkbox value=1>
+                <label for=ShowTimingStatsCheck>Show Timing Statistics</label>
+        <tr>
+            <td>
+                <button id=DebugSaveMemoryBtn type=button>Save Memory</button>
+            <td class=rj>
+                <button id=DebugLoadMemoryBtn type=button>Load Memory</button>
+    </table>
+
     <div id=DebugPanelControlDiv>
         <button id=DebugCloseBtn>Close Panel</button>
-    </div<
+    </div>
+
+    <div id=DebugLoadMemDiv>
+        <p class="center bold">Select a Memory State JSON file to reload</p>
+        <input id=DebugLoadMemSelector type=file size=60
+               accept=".json, application/json">
+        <p class=rj>
+            <button id=DebugLoadMemCancelBtn>Cancel</button>
+        </p>
+    </div>
 </div>
 
 </body>

@@ -286,9 +286,9 @@ LABEL.modeCaptionBL {
     z-index:            10;
     background-color:   #FFE;
     padding:            8px;
-    border:             2px solid black;
+    border:             2px solid red;
     border-radius:      8px;
-    box-shadow:         4px 4px 4px black}
+    box-shadow:         8px 8px 8px black}
 #DebugPanelDiv BUTTON {
     height:             fit-content;
     width:              fit-content;
@@ -310,3 +310,19 @@ LABEL.modeCaptionBL {
     width:              100%;
     margin-top:         8px;
     text-align:         right}
+
+#DebugLoadMemDiv {
+    position:           absolute;
+    display:            none;
+    top:                50%;
+    left:               50%;
+    width:              120%;
+    height:             fit-content;
+    transform:          translate(-50%, -50%);
+    padding:            4px;
+    z-index:            10;
+    background-color:   #FFD000;
+    border:             2px solid black;
+    box-shadow:         4px 4px 4px black}
+#DebugLoadMemSelector {
+    width:              100%}

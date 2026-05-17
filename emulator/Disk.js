@@ -253,6 +253,15 @@ class Disk {
     }
 
     /**************************************/
+    storeWord(address, word) {
+        /* Stores the word value at logical address "address", i.e., at the
+        address the Processor uses, not the physical sector location. The
+        address is a simple integer, not the C register format */
+
+        this.diskMem[this.computeDiskIndex(address)] = word >>> 0;
+    }
+
+    /**************************************/
     findSector(address) {
         /* Returns true if the sector portion of "address" matches the current
         S1 sector address, which is the logical address of the NEXT physical

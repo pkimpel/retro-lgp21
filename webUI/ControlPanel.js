@@ -26,10 +26,10 @@ import * as Version from "../emulator/Version.js";
 import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
 import {FlipFlop} from "../emulator/FlipFlop.js";
-import {openPopup} from "./WebUIUtil.js";
 import {Disk} from "../emulator/Disk.js";
 import {Processor} from "../emulator/Processor.js";
 
+import {openPopup} from "./WebUIUtil.js";
 import {ColoredLamp} from "./ColoredLamp.js";
 import {ToggleSwitch} from "./ToggleSwitch.js";
 import {ThreeWaySwitch} from "./ThreeWaySwitch.js";
@@ -612,11 +612,11 @@ class ControlPanel {
 
 
     /*******************************************************************
-    *   Debug Panel                                                    *
+    *   Diagnostic Panel                                               *
     *******************************************************************/
 
     /**************************************/
-    openDebugPanel(ev) {
+    openDebugPanel() {
         /* Opens the DebugPanelDiv and wires up its events */
         const p = this.processor;
         const disk = p.disk;
@@ -768,7 +768,7 @@ class ControlPanel {
             const doc = ev.target;
             const win = doc.defaultView;
             const text = doc.getElementById("Paper");
-            const title = "retro-lgp21 Memory Dump";
+            const title = `retro-lgp21 Memory Dump${(new Date()).toISOString().replaceAll(":", "")}`;
 
             const putLine = (line) => {
                 text.appendChild(doc.createTextNode(line.trimEnd() + "\n"));
@@ -783,14 +783,142 @@ class ControlPanel {
         };
 
         //----------------------------
-        const initiateMemDumpView = (ev) => {
+        const initiateMemDumpView = () => {
             /* Formats the contents of core memory to a pop-up window, from which the
             user can copy/save/print it as they desire */
-            const title = "retro-1620 Memory Dump";
 
             openPopup(this.window, "./FramePaper.html", "",
                     "scrollbars,resizable,width=882,height=500", this, buildMemDumpView);
-            closeDebugPanel(ev);
+            closeDebugPanel();
+        };
+
+        //----------------------------
+        const saveMemory = () => {
+            /* Saves the current contents of the disk memory and processor
+            state to a JSON file */
+            const now = new Date();
+            const state = {
+                Comment: [`retro-lgp21 v${Version.lgp21Version} State Dump - ${now.toString()}`],
+                Registers: {C: p.C.value, R: p.R.value, A: p.A.value},
+                Memory: []};
+
+            if (!(p.blocked)) {
+                this.setResultMsg("Save Memory requires the Processor to be halted", 5);
+                return;
+            }
+
+            for (let a=0; a<memSize; ++a) {
+                state.Memory[a] = disk.fetchWord(a);
+            }
+
+            let text = JSON.stringify(state);
+            if (!text.endsWith("\n")) {         // make sure there's a final new-line
+                text = text + "\n";
+            }
+
+            const url = `data:text/plain,${encodeURIComponent(text)}`;
+            const hiddenLink = this.doc.createElement("a");
+
+            hiddenLink.setAttribute("download",
+                    `retro-lgp21-Memory-State-${now.toISOString().replaceAll(":", "")}.json`);
+            hiddenLink.setAttribute("href", url);
+            hiddenLink.click();
+        };
+
+        //----------------------------
+        const loadMemory = () => {
+            /* Restores the contents of the disk memory and processor state from
+            a JSON file */
+
+            const closeMemLoadDiv = () => {
+                this.$$("DebugLoadMemDiv").style.display = "none";
+                this.$$("DebugLoadMemSelector").removeEventListener("change", loadMemSelect);
+            };
+
+            const loadMemSelect = async (ev) => {
+                /* Handle the <input type=file> onchange event when a file is selected
+                to initiate a disk state load */
+                const f = ev.target.files[0];
+                const fileName = f.name;
+                let fileType = f.type ?? "";
+
+                // Determine which type of file we're getting.
+                switch (fileType) {
+                case "application/json":
+                    // do nothing
+                    break;
+                default:
+                    const x = fileName.lastIndexOf(".");
+                    const ext = x < 0 ? "" : fileName.substring(x).toLowerCase();
+                    switch (ext) {
+                    case ".json":
+                        fileType = "application/json";
+                        break;
+                    default:
+                        this.setResultMsg(`Memory load file "${fileName}" invalid type "${fileType}"`, 9);
+                        closeMemLoadDiv();
+                        return;
+                        break;
+                    }
+                }
+
+                // Obtain the disk state as JSON.
+                const reader = new FileReader();
+                let json = await f.text();
+
+                // Parse the disk state JSON to an object.
+                let state = null;
+                try {
+                    state = JSON.parse(json);
+                } catch (e) {
+                    this.setResultMsg(`Could not parse JSON disk state:\n${e.message}:\nAborting load.`, 9);
+                }
+
+                if (state) {
+                    if (!("Memory" in state)) {
+                        this.setResultMsg("No Memory object in state file", 9);
+                    } else if (this.window.confirm(
+                            `Are you sure you want to COMPLETELY REPLACE the the contents of the memory?`)) {
+                        console.log(`Loading disk state from ${fileName}`);
+                        const limit = Math.min(state.Memory.length, memSize);
+                        let x = 0;
+                        while (x < limit) {
+                            let w = state.Memory[x];
+                            disk.storeWord(x, ((typeof w) == "number") ? state.Memory[x] : 0);
+                            ++x;
+                        }
+
+                        while (x < memSize) {
+                            disk.storeWord(x, 0);
+                            ++x;
+                        }
+
+                        if ("Registers" in state) {
+                            const reg = state.Registers;
+                            p.C.value = typeof reg.C == "number" ? reg.C : 0;
+                            p.R.value = typeof reg.R == "number" ? reg.R : 0;
+                            p.A.value = typeof reg.A == "number" ? reg.A : 0;
+                        }
+
+                        this.setResultMsg("Memory state restored.", 5);
+                        console.log("Memory state restored successfully.");
+                    }
+                }
+
+                closeMemLoadDiv();
+            };
+
+            // Outer block of loadMemory.
+
+            if (!(p.blocked)) {
+                this.setResultMsg("Load Memory requires the Processor to be halted", 5);
+            } else {
+                this.$$("DebugLoadMemDiv").style.display = "block";
+                this.$$("DebugLoadMemSelector").addEventListener("change", loadMemSelect);
+                this.$$("DebugLoadMemCancelBtn").addEventListener("click", () => {
+                    closeMemLoadDiv();
+                }, {once: true});
+            }
         };
 
         //----------------------------
@@ -806,6 +934,12 @@ class ControlPanel {
                 this.$$("TimingStatsPanel").style.display = this.statsVisible ? "block" : "none";
                 this.config.putNode("ControlPanel.ShowTimingStatsCheck", this.statsVisible ? 1 : 0);
                 break;
+            case "DebugSaveMemoryBtn":
+                saveMemory();
+                break;
+            case "DebugLoadMemoryBtn":
+                loadMemory();
+                break;
             case "DebugCloseBtn":
                 closeDebugPanel();
                 break;
@@ -813,7 +947,7 @@ class ControlPanel {
         };
 
         //----------------------------
-        const closeDebugPanel = (ev) => {
+        const closeDebugPanel = () => {
             /* Unwires the local events and closes the debug panel */
 
             this.$$("DebugPanelDiv").removeEventListener("click", debugPanelClick);
