@@ -179,7 +179,9 @@ IMG#retroButton {
     border:             none;
     margin-left:        1ex}
 IMG#SystemImage {
-    max-width:          100%}
+    max-height:         80%;
+    max-width:          80%;
+    box-shadow:         12px 12px 12px gray}
 
 DIV#footerDiv {
     position:           absolute;

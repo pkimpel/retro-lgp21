@@ -569,8 +569,9 @@ class ControlPanel {
             this.emulationPaused = true;
             this.pauseStartStamp = performance.now();
             this.processor.startPause(this.pauseStartStamp);
-            clearTimeout(this.intervalToken);           // stop Control Panel refresh
             console.debug(`<Emulation paused>  stamp=${this.pauseStartStamp}`);
+            clearTimeout(this.intervalToken);           // stop Control Panel refresh
+            this.intervalToken = 0;                     // reset the token
         }
     }
 
@@ -588,9 +589,11 @@ class ControlPanel {
             this.emulationPaused = false;
             this.lastRunTime += deltaTime;
             this.processor.endPause(this.pauseStartStamp, deltaTime);
-            this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
             this.setResultMsg("Emulation resumed after browser hidden-page throttling", 7);
             console.debug(`<Emulation resumed> stamp=${now}, delta=${deltaTime} ms`);
+            if (this.intervalToken == 0) {
+                this.intervalToken = this.window.setTimeout(this.boundUpdatePanel, ControlPanel.displayRefreshPeriod);
+            }
         }
     }
 
@@ -602,11 +605,13 @@ class ControlPanel {
         const doc = this.window.document;
         const state = doc.visibilityState;
 
-        console.debug(`<Visibility Change> visibility=${state}, paused=${this.emulationPaused}`);
-        if (state == "hidden") {
-            this.pauseEmulation();
-        } else if (this.emulationPaused) {
-            this.resumeEmulation();
+        console.debug(`<Visibility Change> visibility=${state}, paused=${this.emulationPaused}, blocked=${this.processor.blocked}`);
+        if (!this.processor.blocked) {
+            if (state == "hidden") {
+                this.pauseEmulation();
+            } else if (this.emulationPaused) {
+                this.resumeEmulation();
+            }
         }
     }
 
@@ -877,6 +882,8 @@ class ControlPanel {
                 if (state) {
                     if (!("Memory" in state)) {
                         this.setResultMsg("No Memory object in state file", 9);
+                    } else if ((typeof state.Memory) != "array") {
+                        this.setResultMsg("Memory object is not an array", 9);
                     } else if (this.window.confirm(
                             `Are you sure you want to COMPLETELY REPLACE the the contents of the memory?`)) {
                         console.log(`Loading disk state from ${fileName}`);
@@ -987,11 +994,6 @@ class ControlPanel {
     shutDown() {
         /* Shuts down the panel */
 
-        if (this.intervalToken) {
-            this.window.clearTimeout(this.intervalToken);
-            this.intervalToken = 0;
-        }
-
         // Clear the scope.
         this.scopePathC.setAttribute("d", "");
         this.scopePathR.setAttribute("d", "");
@@ -1004,6 +1006,10 @@ class ControlPanel {
             this.powerBtn.set(0);
             this.$$("PowerBtnFX").classList.remove("powerDown");
             this.$$("PowerBtnFX").style.display = "none";
+            if (this.intervalToken) {
+                this.window.clearTimeout(this.intervalToken);
+                this.intervalToken = 0;
+            }
 
             this.doc.removeEventListener("beforeunload", this.boundBeforeUnload);
             this.doc.removeEventListener("pagehide", this.boundPanelUnload);

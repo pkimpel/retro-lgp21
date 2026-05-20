@@ -209,7 +209,7 @@ BUTTON.flexoLeverDown {
     font-weight:        bold;
     color:              white;
     background-color:   #666;
-    border:             1px solid #333;
+    border:             1px solid black;
     border-radius:      4px;
     box-shadow:         2px 2px 2px #999}
 #PRBufferStatus {

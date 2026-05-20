@@ -142,6 +142,8 @@ const globalLoad = (ev) => {
 
         if (!processor.blocked) {
             processor.stop();
+            processor.modeSwitch = Processor.modeOneOperation;  // to allow power down to succeed
+            processor.terminateIO();
             setTimeout(systemShutDown, 1000);
             return;
         }
@@ -154,11 +156,12 @@ const globalLoad = (ev) => {
         }
 
         await processor.powerDown();
+        $$("EmulatorFrame").style.visibility = "hidden";
+
         context.devices = null;
         context.controlPanel = null;
         context.processor = null;
 
-        $$("EmulatorFrame").style.visibility = "hidden";
         $$("StartUpBtn").disabled = false;
         $$("StartUpBtn").focus();
         $$("ConfigureBtn").disabled = false;

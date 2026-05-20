@@ -47,7 +47,7 @@ class Flexowriter {
     static defaultCyclePeriod = 1000/Flexowriter.defaultCycleRate;
                                         // default character period, ms/char
     static minCyclePeriod = 1000/2500;  // minimum character period, ms/char (2500 cps)
-    static fastCarriageRate = 64/0.75;  // carriage return/tab speed, col/sec
+    static fastCarriageRate = 64/0.5;   // carriage return/tab speed, col/sec
     static fastCarriagePeriod = 1000/Flexowriter.fastCarriageRate;
                                         // default fast carriage period, ms/col
     static windowTop = 492;             // default window top position
@@ -1205,7 +1205,6 @@ class Flexowriter {
             if (this.sendActive) {
                 if (code == IOCodes.ioCondStop) {
                     this.disableSend();         // must be done BEFORE sending the code
-                    code = -1;                  // we don't think the Flex actually sends the stop code
                 }
 
                 const result = await this.processor.receiveInputCode(code);

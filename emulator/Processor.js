@@ -316,15 +316,13 @@ class Processor {
     async receiveInputCode(code) {
         /* Receives the next I/O code from an input device and loads it into
         the P register. There is special handling for mode ManInput:
-          - For normal input, if the code is a COND STOP or negative code
-            (indicating device has stopped), terminates the I/O by setting the
-            activeIODevice to null; if the code is one that does not enter the
-            A register, ignores it; otherwise resets waitingIODevice to allow
-            Phase 1 to finish and Phase 4 to shift the (rotated) code into the
-            A register.
-          - For Manual Input, the same filtering of input codes takes place,
-            but there is no I/O operation to terminate, and the first 4 bits
-            of P are unconditionally shifted left into the A register.
+          - For normal input, if the code is a negative code (indicating device
+            has stopped), terminates the I/O by setting the activeIODevice to
+            null, otherwise resets waitingIODevice to allow Phase 1 to finish
+            and Phase  3 & 4 to shift the (rotated) code into the A register.
+          - For Manual Input, the same filtering of input codes takes place as
+            in Phase 3, but the I/O operation cannot be terminated, so the first
+            4 bits of P are unconditionally rotated through the A register.
         If no I/O is in progress, returns -1; if an error occurs while waiting
         to be for input, returns that error code; otherwise returns 0 */
         let result = 0;
@@ -339,24 +337,33 @@ class Processor {
 
             if (result) {
                 // Just pass the error back to caller.
-            } else if (code == IOCodes.ioCondStop || code < 0) { // read stopped
-                if (this.modeSwitch == Processor.modeManInput) {
-                    this.activeIODevice.enableSend(false); // reassert Flexowriter send mode
-                } else {
-                    this.terminateIO();
-                }
-            } else if (code == IOCodes.ioTapeFeed || code == IOCodes.ioDelete) {
-                // Ignore Tape Feed and Delete (rubout) codes
-            } else if ((code & 0b100001) == 0 && this.K.value) {
-                // Ignore 0xxxx0 codes in 4-bit mode.
+            } else if (code < 0) {                      // read stopped
+                this.terminateIO();
             } else {
-               // Load P by rotating the tape code to internal format, then signal I/O ready.
-               this.P.value = ((code & 0b011111) << 1) | ((code & 0b100000 >>> 5));
-               if (this.modeSwitch == Processor.modeManInput) {
-                   this.A.value = ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2);
-               } else {
-                   this.waitingIODevice = false;        // input is ready for shifting in P4
-               }
+                // Load P by rotating the tape code to internal format.
+                this.P.value = ((code & 0b011111) << 1) | ((code >>> 5) & 1);
+                if (this.modeSwitch != Processor.modeManInput) {
+                    this.waitingIODevice = false;       // input is ready for P3 & P4
+                } else {
+                    // Do input handling for Manual Input mode here instead of P3 & P4.
+                    if (code == IOCodes.ioCondStop) {           // conditional halt code
+                        this.activeIODevice.enableSend(false);  // reassert Flexowriter send mode
+                    } else if (code == IOCodes.ioTapeFeed || code == IOCodes.ioDelete) {
+                        // Ignore Tape Feed and Delete (rubout) codes
+                    } else if ((code & 0b100001) == 0 && this.K.value) {
+                        // Ignore 0xxxx0 tape codes in 4-bit mode.
+                    } else {
+                        // Otherwise, do a 4-bit rotation of P to A and A to P, and we're done.
+                        const shiftOut = (this.A.value >>> 26) & 0b111100;
+                        this.A.value = ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2);
+                        this.P.value = shiftOut;
+
+                        this.waitingIODevice = true;            // signal waiting for next code
+                        if (this.readyForInput.waiting) {
+                            this.readyForInput.proceed(0);      // allow the other receiveInputCode() to proceed
+                        }
+                    }
+                }
             }
         }
 
@@ -632,35 +639,49 @@ class Processor {
             break;
 
         case Processor.opTest:          // T=TEST
+            nextPhase = 4;
             if ((this.A.value & Util.wordSignMask) ||
                     (this.tcSwitch && (this.R.value & Util.wordSignMask))) {
                 this.Q.Q4 = 0;          // convert op to Unconditional Transfer
                 this.order &= 0b1110;
             }
-            nextPhase = 4;
             break;
 
         case Processor.opInput:         // I=INPUT and SHIFT
+            nextPhase = 4;              // P3 is 1 word-time only
             if (this.activeIODevice) {  // => Faf, not first P3
-                // Just proceed to Phase 4 and shift the received code into A.
+                let code = this.P.value;
+                if (code == IOCodes.icCondStop) {
+                    // Terminate the I/O on a conditional stop code.
+                    this.terminateIO();
+                    nextPhase = 1;      // fetch next instruction
+                } else if (code == IOCodes.icTapeFeed || code == IOCodes.icDelete) {
+                    // Ignore Tape Feed and Delete (rubout) codes
+                    nextPhase = 1;      // receive the next code
+                    this.waitingIODevice = true;
+                } else if ((code & 0b000011) == 0 && this.K.value) {
+                    // Ignore xxxx00 internal codes in 4-bit mode.
+                    nextPhase = 1;      // receive the next code
+                    this.waitingIODevice = true;
+                } else {
+                    // Just proceed to Phase 4 and rotate the received code into A.
+                }
             } else {                    // initial P3 - initiate input
                 this.selectIODevice(this.P.value);
                 this.K.value = this.R.value & Util.wordSignMask;        // 4/6-bit mode
                 this.X.value = 0;       // reset end-input flag (was really set in the next P1)
                 this.P.value = 0;       // reset P in preparation for P4 shift into A
                 if (this.activeIODevice) { // don't call enableSend if this is just a Shift
-                    this.activeIODevice.enableSend(true);               // start input
+                    this.activeIODevice.enableSend(true);               // start input & proceed to P4
                 }
             }
-
-            nextPhase = 4;              // P3 is 1 word-time only
             break;
 
         case Processor.opPrint:         // P=PRINT
+            nextPhase = 4;              // P3 is 1 word-time only
             this.selectIODevice(this.P.value);
             this.K.value = this.R.value & Util.wordSignMask;            // 4/6-bit mode
             this.X.value = 0;           // reset end-output flag
-            nextPhase = 4;              // P3 is 1 word-time only
             break;
 
         default:                        // Search for operand sector
@@ -668,7 +689,7 @@ class Processor {
             if (this.disk.findSector(this.R.value)) {
                 nextPhase = 4;
             } else {
-                this.K.value = 0;       // operand sector not found (yet)
+                this.K.value = 0;       // operand sector not found (yet), stay in P3
             }
             break;
         }
@@ -723,12 +744,24 @@ class Processor {
             });
             break;
 
-        case Processor.opInput:         // I: Input & Left Shift (4 or 6 bit)
-            this.A.value = this.K.value ? ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2)
-                                        : ((this.A.value << 6) & Util.fullWordMask) | (this.P.value);
-            this.waitingIODevice = true;
-            if (this.readyForInput.waiting) {
-                this.readyForInput.proceed(0);      // allow receiveInputCode() to proceed
+        case Processor.opInput:         // I: Input & Shift: rotate P to A and A to P (4 or 6 bit)
+            if (this.K.value) {                 // 4-bit rotate
+                const shiftOut = (this.A.value >>> 26) & 0b111100;      // 4 bits shifted out of A
+                this.A.value = ((this.A.value << 4) & Util.fullWordMask) | (this.P.value >> 2);
+                this.P.value = shiftOut;
+            } else {                            // 6-bit rotate
+                const shiftOut = (this.A.value >>> 26) & 0b111111;      // 6 bits shifted out of A
+                this.A.value = ((this.A.value << 6) & Util.fullWordMask) | this.P.value;
+                this.P.value = shiftOut;
+            }
+
+            if (this.P.value == IOCodes.icCondStop) {
+                this.terminateIO();             // Programmatically-induced conditional stop code
+            } else {
+                this.waitingIODevice = true;    // signal waiting for next code
+                if (this.readyForInput.waiting) {
+                    this.readyForInput.proceed(0);      // allow receiveInputCode() to proceed
+                }
             }
             break;
 
