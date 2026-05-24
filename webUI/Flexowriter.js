@@ -136,7 +136,8 @@ class Flexowriter {
         this.columns = 132;             // typewriter line length (right margin)
         this.printerLine = 0;
         this.printerCol = 0;
-        this.upperCase = 0;             // default to lower case
+        this.printerUpperCase = 0;      // current printer shift, default to lower case
+        this.keyboardUpperCase = 0;     // current keyboard shift, default to lower case
         this.isRed = false;             // printing red currently in effect
         this.tabStops = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,
                         90,95,100,105,110,115,120,125]; // default in case config is bad
@@ -691,9 +692,11 @@ class Flexowriter {
 
                     // Do any case shifting that's necessary.
                     const needsUpper = code & 0x80;
-                    if (needsUpper != 0 && this.upperCase == 0) {
+                    if (needsUpper != 0 && this.keyboardUpperCase == 0) {
+                        this.keyboardUpperCase = 1;
                         this.enqueueInput(IOCodes.ioUpperCase);
-                    } else if (needsUpper == 0 && this.upperCase != 0) {
+                    } else if (needsUpper == 0 && this.keyboardUpperCase != 0) {
+                        this.keyboardUpperCase = 0;
                         this.enqueueInput(IOCodes.ioLowerCase);
                     }
 
@@ -742,12 +745,16 @@ class Flexowriter {
         const tomPeriod = this.calcTiming(Flexowriter.defaultCyclePeriod);      // ms
         let nextKeystrokeStamp = performance.now();
         this.openTypeOMaticPanel();
-        this.tomUpperCase = this.upperCase != 0;
+        this.tomUpperCase = this.keyboardUpperCase != 0;
 
         this.tomCanceled = false;
         while (typing) {
             nextKeystrokeStamp += tomPeriod;
             await this.tomTimer.delayUntil(nextKeystrokeStamp);
+
+            while(this.inputQueue.length > 0) {
+                await this.tomTimer.delayFor(Flexowriter.defaultCyclePeriod);
+            }
 
             const key = this.tomBuffer[this.tomIndex];
             let code = IOCodes.ioTapeFeed;
@@ -922,10 +929,10 @@ class Flexowriter {
         (upper=false) and updates the UC/LC indicators on the panel */
 
         if (upper) {
-            this.upperCase = 1;
+            this.printerUpperCase = 1;
             this.ucBtn.checked = true;
         } else {
-            this.upperCase = 0;
+            this.printerUpperCase = 0;
             this.lcBtn.checked = true;
         }
     }
@@ -1188,7 +1195,7 @@ class Flexowriter {
                 // valid, but ignored by the typewriter
                 break;
             default:
-                if (this.upperCase) {
+                if (this.printerUpperCase) {
                     this.printChar(Flexowriter.upperGlyphs[flexCode], cyclePeriod);
                 } else {
                     this.printChar(Flexowriter.lowerGlyphs[flexCode], cyclePeriod);

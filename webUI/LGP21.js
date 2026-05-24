@@ -21,7 +21,7 @@ import {Flexowriter} from "./Flexowriter.js";
 
 const globalLoad = (ev) => {
     const config = new SystemConfig();  // system configuration object
-    let statusMsgTimer = 0;             // status message timer control cookie
+    let statusMsgTimerToken = 0;        // status message timer control token
 
     const context = {
         config,
@@ -53,13 +53,13 @@ const globalLoad = (ev) => {
     function clearStatusMsg(inSeconds) {
         /* Delays for "inSeconds" seconds, then clears the StatusMsg element */
 
-        if (statusMsgTimer) {
-            clearTimeout(statusMsgTimer);
+        if (statusMsgTimerToken) {
+            clearTimeout(statusMsgTimerToken);
         }
 
-        statusMsgTimer = setTimeout(function(ev) {
+        statusMsgTimerToken = setTimeout(function(ev) {
             $$("StatusMsg").textContent = "";
-            statusMsgTimer = 0;
+            statusMsgTimerToken = 0;
         }, inSeconds*1000);
     }
 
@@ -144,8 +144,11 @@ const globalLoad = (ev) => {
             processor.stop();
             processor.modeSwitch = Processor.modeOneOperation;  // to allow power down to succeed
             processor.terminateIO();
-            setTimeout(systemShutDown, 1000);
-            return;
+            if (statusMsgTimerToken < 5) {      // reuse this variable since it's not in use now
+                ++ statusMsgTimerToken;
+                setTimeout(systemShutDown, 1000);
+                return;
+            }
         }
 
         for (const e in context.devices) {

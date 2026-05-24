@@ -191,7 +191,7 @@ BUTTON.flexoLeverDown {
 #PRControlsMenu {
     position:           absolute;
     display:            none;
-    top:                48px;
+    top:                56px;
     left:               0;
     width:              360px;
     height:             64px;
@@ -311,7 +311,7 @@ BUTTON.flexoLeverDown {
     top:                4px;
     right:              20px;
     z-index:            10;
-    opacity:            0.33}
+    opacity:            0.5}
 #TypewriterMenu {
     position:           absolute;
     display:            none;

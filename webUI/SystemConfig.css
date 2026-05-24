@@ -120,7 +120,9 @@ BUTTON.yellowButton {
     right:              8px;
     font-size:          6pt;
     padding-left:       4px;
-    padding-right:      4px}
+    padding-right:      4px;
+    background-color:   white;
+    border-radius:      6px}
 
 #RetroLogoImage {
     vertical-align:     bottom;

@@ -11,6 +11,9 @@
 *   Original version, from retro-g15/G15.css.
 ***********************************************************************/
 
+HTML {
+    overflow:           hidden}
+
 BODY {
     position:           relative;
     height:             100%;

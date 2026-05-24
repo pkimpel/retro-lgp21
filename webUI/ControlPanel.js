@@ -49,18 +49,18 @@ class ControlPanel {
     static windowWidth = 1000;          // window innerWidth, pixels
 
     // Scope trace parameters
-    static scopeBeamWidth = 16;         // width of scope trace beam, units
+    static scopeBeamWidth = 12;         // width of scope trace beam, units
     static scopeTraceX = 120;           // horizontal offset of scope traces on scope
     static scopeTraceCY = 384.0;        // vertical offset of C register trace
     static scopeTraceRY = 649.5;        // vertical offset of R register trace
     static scopeTraceAY = 915.0;        // vertical offset of A register trace
     static scopeTraceHOffset = 10;      // horizontal offset of first (sign) bit
-    static scopeTraceVOffset = 106;     // vertical offset of the 0 state
+    static scopeTraceVOffset = 98;      // vertical offset of the 0 state
     static scopeTraceWidth = 1220;      // total width of the trace
-    static scopeBitHeight = 91;         // height of the 1 state
+    static scopeBitHeight = 75;         // height of the 1 state
     static scopeBitWidth = 37.5;        // total width of one bit-time
-    static scopeRampUpWidth = 3;        // width of the bit ramp-up slant
-    static scopeRampDownWidth = 1;      // width of the bit ramp-down slant
+    static scopeRampUpWidth = 5;        // width of the bit ramp-up slant
+    static scopeRampDownWidth = 3;      // width of the bit ramp-down slant
 
     // Public instance properties
 
@@ -882,7 +882,7 @@ class ControlPanel {
                 if (state) {
                     if (!("Memory" in state)) {
                         this.setResultMsg("No Memory object in state file", 9);
-                    } else if ((typeof state.Memory) != "array") {
+                    } else if (!Array.isArray(state.Memory)) {
                         this.setResultMsg("Memory object is not an array", 9);
                     } else if (this.window.confirm(
                             `Are you sure you want to COMPLETELY REPLACE the the contents of the memory?`)) {
@@ -993,15 +993,20 @@ class ControlPanel {
     /**************************************/
     shutDown() {
         /* Shuts down the panel */
+        const p = this.processor;
 
-        // Clear the scope.
-        this.scopePathC.setAttribute("d", "");
-        this.scopePathR.setAttribute("d", "");
-        this.scopePathA.setAttribute("d", "");
+        // Stop the Processor if it's running.
+        p.stop();
 
         // Ramp down.
         this.$$("PowerBtnFX").style.display = "block";
         this.$$("PowerBtnFX").classList.add("powerDown");
+
+        // Clear the scope.
+        p.C.value = 0;
+        p.R.value = 0;
+        p.A.value = 0;
+
         this.window.setTimeout(() => {
             this.powerBtn.set(0);
             this.$$("PowerBtnFX").classList.remove("powerDown");
@@ -1011,6 +1016,7 @@ class ControlPanel {
                 this.intervalToken = 0;
             }
 
+            // Unwire events and initiate system shutdown.
             this.doc.removeEventListener("beforeunload", this.boundBeforeUnload);
             this.doc.removeEventListener("pagehide", this.boundPanelUnload);
             this.doc.removeEventListener("visibilitychange", this.boundChangeVisibility);
@@ -1021,13 +1027,13 @@ class ControlPanel {
             this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing);
             this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
-            this.context.systemShutDown();
 
-            if (!this.iframe) {
-                this.window.setTimeout(() => {
+            this.window.setTimeout(() => {
+                this.context.systemShutDown();
+                if (!this.iframe) {
                     this.window.close();
-                }, 500);
-            }
+                }
+            }, 500);
         }, 2000);
     }
 } // class ControlPanel
