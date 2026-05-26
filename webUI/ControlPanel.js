@@ -45,7 +45,7 @@ class ControlPanel {
     static downSwitchImage = "./resources/ToggleDown.png";
     static upSwitchImage = "./resources/ToggleUp.png";
     static midSwitchImage = "./resources/ToggleMid.png";
-    static windowHeight = 452;          // window innerHeight, pixels
+    static windowHeight = 400;          // window innerHeight, pixels
     static windowWidth = 1000;          // window innerWidth, pixels
 
     // Scope trace parameters
@@ -69,7 +69,7 @@ class ControlPanel {
     window = null;                      // window object
 
     // Performance stats
-    avgInstructionRate = 30;            // running average instructions/sec (starting with a reasonable value)
+    avgInstructionRate = 30;            // a reasonable initial running-average instructions/sec
     intervalToken = 0;                  // panel refresh timer cancel token
     lastETime = 0;                      // last emulation clock value
     lastInstructionCount = 0;           // prior total instruction count (for average)
@@ -103,6 +103,7 @@ class ControlPanel {
         this.boundPanelUnload = this.panelUnload.bind(this);
         this.boundControlSwitchClick = this.controlSwitchClick.bind(this);
         this.boundResetTiming = this.resetTiming.bind(this);
+        this.boundResetResultMsg = this.resetResultMsg.bind(this);
         this.boundOpenDebugPanel = this.openDebugPanel.bind(this);
         this.boundToggleTracing = this.toggleTracing.bind(this);
         this.boundChangeVisibility = this.changeVisibility.bind(this);
@@ -307,7 +308,7 @@ class ControlPanel {
     /**************************************/
     resetResultMsg() {
         /* Removes the ResultMsg div from the DOM */
-        const e = this.$$("#ResultMsg");
+        const e = this.$$("ResultMsg");
 
         if (this.resultMsgTimeoutToken) {
             clearTimeout(this.resultMsgTimeoutToken);
@@ -315,6 +316,7 @@ class ControlPanel {
         }
 
         if (e) {
+            e.style.display = "none";
             e.parentNode.removeChild(e);
         }
     }
@@ -606,10 +608,12 @@ class ControlPanel {
         const state = doc.visibilityState;
 
         console.debug(`<Visibility Change> visibility=${state}, paused=${this.emulationPaused}, blocked=${this.processor.blocked}`);
-        if (!this.processor.blocked) {
-            if (state == "hidden") {
+        if (state == "hidden") {
+            if (!this.processor.blocked) {
                 this.pauseEmulation();
-            } else if (this.emulationPaused) {
+            }
+        } else {
+            if (this.emulationPaused) {
                 this.resumeEmulation();
             }
         }
@@ -628,6 +632,9 @@ class ControlPanel {
         const memSize = disk.diskSize;
 
         const hex = (v) => v.toString(16).padStart(8, "0");
+
+        const isPlainObject = (item) =>
+            item !== null && typeof item === "object" && !Array.isArray(item);
 
         const xlateText = (word) => {
             let w = word >>> 0;
@@ -703,7 +710,7 @@ class ControlPanel {
             while (addr < memSize) {
                 word = disk.fetchWord(addr);
                 if (word == lastWord) {
-                    ++dups;                     // count contiguous zero words
+                    ++dups;                     // count contiguous duplicate words
                 } else {
                     // Fill in any duplicate words that will fit on the line.
                     while (dups && words < wpl) {
@@ -879,7 +886,7 @@ class ControlPanel {
                     this.setResultMsg(`Could not parse JSON disk state:\n${e.message}:\nAborting load.`, 9);
                 }
 
-                if (state) {
+                if (isPlainObject(state)) {
                     if (!("Memory" in state)) {
                         this.setResultMsg("No Memory object in state file", 9);
                     } else if (!Array.isArray(state.Memory)) {
@@ -900,11 +907,11 @@ class ControlPanel {
                             ++x;
                         }
 
-                        if ("Registers" in state) {
-                            const reg = state.Registers;
-                            p.C.value = typeof reg.C == "number" ? reg.C : 0;
-                            p.R.value = typeof reg.R == "number" ? reg.R : 0;
-                            p.A.value = typeof reg.A == "number" ? reg.A : 0;
+                        const reg = state.Registers;
+                        if (isPlainObject(reg)) {
+                            p.C.value = typeof reg.C === "number" ? reg.C : 0;
+                            p.R.value = typeof reg.R === "number" ? reg.R : 0;
+                            p.A.value = typeof reg.A === "number" ? reg.A : 0;
                         }
 
                         this.setResultMsg("Memory state restored.", 5);

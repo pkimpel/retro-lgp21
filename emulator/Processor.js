@@ -1182,7 +1182,8 @@ class Processor {
             this.blocked = true;                        // set HALT lamp
             this.stopRequested = false;
             this.devices = this.context.devices;        // I/O device objects
-            await this.disk.restore();                  // restore former disk contents
+            await this.disk.openDatabase();             // open the Disk memory database
+            await this.disk.restore();                  // restore former memory contents
             this.poweredOn = true;
             console.log("<System Power Up>");
 

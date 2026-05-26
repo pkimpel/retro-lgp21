@@ -14,9 +14,9 @@
 *
 * The disk memory object can preserve its contents in a local IndexedDB
 * instance across emulator restarts using its persist() and restore()
-* methods. Both must be called externally. The data base is created
-* automatically on first instantiation and the saved image words are set
-* to zero values.
+* methods. Both methods, plus openDatabase(), must be called externally.
+* The data base is created automatically on first instantiation and the
+* saved image words are set to zero values.
 ************************************************************************
 * 2026-03-21  P.Kimpel
 *   Original version.
@@ -69,7 +69,7 @@ class RegisterC extends Register {
 
 class Disk {
 
-    static defaultRPM = 1125;                           // default disk revolution speed, rev/min
+    static defaultRPM = 1180;                           // default disk revolution speed, rev/min
     static maxRPM = Disk.defaultRPM*100;                // maximum disk revolution speed, rev/min
     static physicalTracks = 32;                         // physical number of tracks on the disk
     static physicalTrackSize = 128;                     // words in a physical track
@@ -144,8 +144,6 @@ class Disk {
         this.regAStarLow = new Register(Util.wordBits, this, false);
         this.regAStarHigh = new Register(Util.wordBits, this, false);
 
-        // Restore the memory disk image from its persistence store.
-        this.openDatabase();            // initiates restore, which runs asyncronously
         this.setTiming(Disk.defaultRPM);
     }
 

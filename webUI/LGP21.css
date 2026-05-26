@@ -26,6 +26,8 @@ H1 {
     font-size:          14pt;
     font-weight:        bold}
 
+.pica {
+    font-family:        Pica10BTRoman}
 .registerRoundedBorder {
     border-top:         2px solid white;
     border-left:        2px solid white;
@@ -37,14 +39,14 @@ H1 {
 #HomeFrame {
     position:           absolute;
     top:                0;
-    height:             calc(100% - 8px);
-    width:              calc(100% - 8px);
-    padding:            4px}
+    height:             calc(100% - 16px);
+    width:              calc(100% - 16px);
+    padding:            8px}
 
 #VersionDiv {
     position:           absolute;
-    top:                4px;
-    right:              4px;
+    top:                8px;
+    right:              8px;
     text-align:         right}
 #StatusMsg {
     text-align:         center;
@@ -112,23 +114,22 @@ H1 {
     display:            block;
     font-size:          11px;
     color:              black;
-    background-color:   var(--offWhite);
+    background-color:   #333;
     user-select:        none;
     cursor:             default}
 #ControlPanelFrame {
     position:           absolute;
     top:                0;
     left:               0;
-    height:             452px;
-    width:              calc(100% - 2px);
-    border:             1px solid #666}
+    height:             400px;
+    width:              100%;
+    border:             none}
 #FlexowriterFrame {
     position:           absolute;
-    top:                458px;
+    top:                calc(400px + 4px);
     left:               50%;
-    height:             calc(100% - 460px - 2px);
-    /* width:              calc(100% - 2px); */
+    height:             calc(100% - (400px + 4px) - 2px);
     max-width:          calc(100% - 6px);
     min-width:          480px;
     transform:          translate(-50%, 0);
-    border:             1px solid #666}
+    border:             none}

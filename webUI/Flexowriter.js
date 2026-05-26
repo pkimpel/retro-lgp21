@@ -50,8 +50,8 @@ class Flexowriter {
     static fastCarriageRate = 64/0.5;   // carriage return/tab speed, col/sec
     static fastCarriagePeriod = 1000/Flexowriter.fastCarriageRate;
                                         // default fast carriage period, ms/col
-    static windowTop = 492;             // default window top position
-    static windowHeight = 398;          // default window innerHeight, pixels
+    static windowTop = 440;             // default window top position
+    static windowHeight = 450;          // default window innerHeight, pixels
     static windowWidth = 760;           // default window innerWidth, pixels
 
     static commentRex = /#[^\x0D\x0A]*/g;
@@ -403,10 +403,13 @@ class Flexowriter {
             if (this.manInputLever.state) {
                 this.manualInputLamp.classList.add("lit");
                 this.enableTypeOMatic();
-            } else if (autoStart && this.readerStarted) {
-                // Delay to give Processor time to be ready to receive.
+            } else {
                 const cyclePeriod = this.calcTiming(Flexowriter.defaultCyclePeriod);
-                setTimeout(this.boundEnableReader, cyclePeriod);
+                if (autoStart) {
+                    // Delay one cycle to give Processor time to be ready to receive.
+                    setTimeout(this.readerStarted ? this.boundStartTapeRead
+                                                  : this.boundEnableReader, cyclePeriod);
+                }
             }
         }
     }
