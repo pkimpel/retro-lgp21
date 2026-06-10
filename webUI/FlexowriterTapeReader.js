@@ -56,6 +56,7 @@ class FlexowriterTapeReader {
         */
         let $$ = this.$$ = flexowriter.$$.bind(flexowriter);
         this.processor = context.processor;
+        this.window = flexowriter.window;
         this.flexowriter = flexowriter;
         this.tapeSupplyBar = $$("PRTapeSupplyBar");
         this.bufferLevel = $$("PRBufferLevel");
@@ -118,7 +119,7 @@ class FlexowriterTapeReader {
         this.flexowriter.stopTapeRead();
         this.bufIndex = 0;
         this.tapeSupplyBar.value = this.bufLength;
-        this.flexowriter.window.getSelection().removeAllRanges(); // deselect the menu icon
+        this.window.getSelection().removeAllRanges(); // deselect the menu icon
         this.updateBufferLevel();
     }
 
@@ -248,7 +249,7 @@ class FlexowriterTapeReader {
         }
 
         this.updateBufferLevel();
-        setTimeout(() => {
+        this.window.setTimeout(() => {
             this.menuClose();
         }, 2000);
     }

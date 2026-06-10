@@ -223,7 +223,7 @@ BUTTON.squareButton {
     border:             4px solid black;
     box-shadow:         2px 2px 4px #999}
 BUTTON.whiteButtonLit {
-    background-image:   radial-gradient(#FE9 33%, #EDA 75%, #DDC)}
+    background-image:   radial-gradient(#FE9 70%, #DEC)}
 BUTTON.redButton {
     background-image:   radial-gradient(#900, #600);
     color:              white}

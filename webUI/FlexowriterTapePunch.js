@@ -49,11 +49,9 @@ class FlexowriterTapePunch {
         this.boundMenuClick = this.menuClick.bind(this);
         this.boundFeedTape = this.feedTape.bind(this);
         this.boundDeleteCode = this.deleteCode.bind(this);
-        this.boundResizeWindow = this.resizeWindow.bind(this);
 
         this.clear();
 
-        this.window.addEventListener("resize", this.boundResizeWindow);
         $$("PTMenuIcon").addEventListener("click", this.boundMenuClick);
         this.flexowriter.tapeFeedLever.addEventListener("mousedown", this.boundFeedTape);
         this.flexowriter.codeDeleteLever.addEventListener("mousedown", this.boundDeleteCode);
@@ -61,9 +59,9 @@ class FlexowriterTapePunch {
         // Do offsetting window resizes after loading calms down a bit to force
         // recalculation of the number of characters the TapeView box can display.
         this.tapeView.value = "_";
-        setTimeout(() => {
+        this.window.setTimeout(() => {
             this.window.resizeBy(-4, 0);
-            setTimeout(() => {
+            this.window.setTimeout(() => {
                 this.window.resizeBy(4, 0);
                 this.tapeView.value = " ";
             }, 500);
@@ -326,7 +324,7 @@ class FlexowriterTapePunch {
                     cyclePeriod *= 2.5;     // longer initial delay to debounce the lever switch
                 }
 
-                setTimeout(() => {
+                this.window.setTimeout(() => {
                    if (this.flexowriter.tapeFeedLever.state) {
                        this.feedTape();
                    } else {
@@ -354,7 +352,7 @@ class FlexowriterTapePunch {
                     cyclePeriod *= 2.5;     // longer initial delay to debounce the lever switch
                 }
 
-                setTimeout(() => {
+                this.window.setTimeout(() => {
                    if (this.flexowriter.codeDeleteLever.state) {
                        this.deleteCode();
                    } else {
@@ -370,7 +368,6 @@ class FlexowriterTapePunch {
         /* Shuts down the device */
 
         this.menuClose();
-        this.window.removeEventListener("resize", this.boundResizeWindow);
         this.$$("PTMenuIcon").removeEventListener("click", this.boundMenuClick);
         this.flexowriter.tapeFeedLever.removeEventListener("mousedown", this.boundFeedTape);
         this.flexowriter.codeDeleteLever.removeEventListener("mousedown", this.boundDeleteCode);

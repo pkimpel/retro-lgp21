@@ -256,7 +256,7 @@ class Disk {
         address the Processor uses, not the physical sector location. The
         address is a simple integer, not the C register format */
 
-        this.diskMem[this.computeDiskIndex(address)] = word >>> 0;
+        this.diskMem[this.computeDiskIndex(address)] = (word & Util.wordMask) >>> 0;
     }
 
     /**************************************/
