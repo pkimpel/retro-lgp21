@@ -62,6 +62,7 @@ class FlexowriterTapeReader {
         this.bufferLevel = $$("PRBufferLevel");
 
         this.boundFileSelectorChange = this.fileSelectorChange.bind(this);
+        this.boundFormatSelectChange = this.formatSelectChange.bind(this);
         this.boundMenuClick = this.menuClick.bind(this);
         this.boundRewindReader = this.rewindReader.bind(this);
 
@@ -106,6 +107,7 @@ class FlexowriterTapeReader {
         this.bufIndex = 0;
         this.$$("PRFileSelector").value = null; // reset the control so the same file can be reloaded
         this.$$("PRFormatSelect").selectedIndex = 0;    // default to Auto
+        this.$$("PRFileSelector").accept = ".ptp,.ptx";  // default to both extensions for auto
         this.updateBufferLevel();
     }
 
@@ -216,6 +218,19 @@ class FlexowriterTapeReader {
     }
 
     /**************************************/
+    async formatSelectChange(ev){
+        /* Update file selector default extension list based on format selector*/
+        const formatSelect = this.$$("PRFormatSelect");
+        const formatIndex = formatSelect.selectedIndex;
+        const tapeFormat = formatSelect.options[formatIndex].value;
+        if (tapeFormat == "Auto") {
+            this.$$("PRFileSelector").accept = ".ptp,.ptx";
+        } else {
+            this.$$("PRFileSelector").accept = tapeFormat;
+        }
+    }
+
+    /**************************************/
     async fileSelectorChange(ev) {
         /* Handle the <input type=file> onchange event when files are selected.
         For each file, load it and add it to the input buffer of the reader */
@@ -264,6 +279,7 @@ class FlexowriterTapeReader {
             prMenu.style.display = "block";
             prMenu.addEventListener("click", this.boundMenuClick, false);
             this.$$("PRFileSelector").addEventListener("change", this.boundFileSelectorChange);
+            this.$$("PRFormatSelect").addEventListener("change", this.boundFormatSelectChange);
             this.updateBufferLevel();
         }
     }
@@ -277,6 +293,7 @@ class FlexowriterTapeReader {
         prMenu.removeEventListener("click", this.boundMenuClick, false);
         prMenu.style.display = "none";
         this.$$("PRFileSelector").removeEventListener("change", this.boundFileSelectorChange);
+        this.$$("PRFormatSelect").removeEventListener("change", this.boundFormatSelectChange);
     }
 
     /**************************************/
