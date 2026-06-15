@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>lgp21-tools Tape Image Converter</title>
+<meta name="Author" content="Paul Kimpel">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<meta http-equiv="Content-Style-Type" content="text/css">
+
+<script>
+/***********************************************************************
+* retro-lgp21/software/tools lgp21-tools-Text-Tape-Image-Converter.html
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License,
+*       see http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* Script to convert to convert the ASCII ".txt" paper-tape image format
+* used by Rhys Weatherly's lgp21-tools utilities to the ".ptx" format
+* used by retro-lgp21. See:
+*
+*   https://github.com/rweather/lgp21-tools/
+*
+*
+* To use, select the lgp21-tools file using the file selection control
+* on the page. These normally have a file-name extension of ".txt".
+* Selecting a file automatically starts the conversion.
+*
+* This version outputs the converted data by opening a save dialog for
+* the ".ptx" file. From there you can save the image to a local filesystem.
+************************************************************************
+* 2026-06-12  P.Kimpel
+*   Original version, from retro-g15 software/tools/Binary-Paper-Tape-Decoder.html.
+***********************************************************************/
+"use strict";
+
+window.onload = function() {
+    let panel = document.getElementById("TextPanel");
+    let tapeBlob = null;                // blob read from .ptp file
+    let tapeData = null;                // tape blob as a DataView
+
+    const codeMinus = 1;
+    const codeCarriageReturn = 2;
+    const codeTabulate = 3;
+    const codeStop = 4;
+    const codeReload = 5;
+    const codePeriod = 6;
+    const codeWait = 7;
+
+
+    function spout(text) {
+        /* Appends "text"+NL as a new text node to the panel DOM element */
+        const e = document.createTextNode(text + "\n");
+
+        panel.appendChild(e);
+    }
+
+    function clearPanel() {
+        /* Clears the text panel */
+        let kid;
+
+        while (kid = panel.firstChild) {
+            panel.removeChild(kid);
+        }
+    }
+
+    function convertFile(image, fileName, fileSize) {
+        /* Extracts the digits from the tape image, converts the image bytes to
+           ASCII, and writes it to a new window object within the browser. */
+
+        spout("");
+        spout(`Converting ${fileName}, ${fileSize} bytes`);
+        if (image.length < 1) {
+            spout("    --- Empty file ---");
+            return;
+        }
+
+        let filePrefix = fileName;
+        let extension = "";
+        const match = fileName.match(/^ *([^.]+)([^ ]*) *$/);
+        if (match) {
+            filePrefix = match[1];
+            extension = match[2].toLowerCase();
+        }
+
+        if (extension != ".txt") {
+            spout("WARNING! Input file does not have a .txt extension");
+        }
+
+        if (image.indexOf("<") >= 0) {
+            spout("WARNING! Input file contains a \"<\" character. It may already be in .ptx format");
+        }
+
+        let newImage = image.replaceAll(/\r\n|\n|\r/g, "<\n");
+
+        if (!image.endsWith("\n")) {            // make sure there's a final new-line
+            newImage += "\n";
+        }
+
+        // Convert to a Data URL and open a save dialog for the user.
+        const url = `data:text/plain,${encodeURIComponent(newImage)}`;
+        const hiddenLink = document.createElement("a");
+
+        hiddenLink.setAttribute("download", `${filePrefix}.ptx`);
+        hiddenLink.setAttribute("href", url);
+        hiddenLink.click();
+    }
+
+    function fileSelector_onChange(ev) {
+        /* Handle the <input type=file> onchange event when a file is selected */
+        const f = ev.target.files[0];
+
+        clearPanel();
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            /* Handle the onload event for a Text FileReader */
+            const image = ev.target.result;
+            convertFile(image, f.name, f.size);
+        };
+
+        reader.readAsText(f);
+    }
+
+    function checkBrowser() {
+        /* Checks whether this browser can support the necessary stuff */
+        let missing = "";
+
+        if (!window.File) {missing += ", File"}
+        if (!window.FileReader) {missing += ", FileReader"}
+        if (!window.FileList) {missing += ", FileList"}
+
+        if (missing.length == 0) {
+            return false;
+        } else {
+            alert("No can do... your browser does not support the following features:\n" +
+                    missing.substring(2));
+            return true;
+        }
+    }
+
+    /* Start of window.onload() */
+    if (checkBrowser()) {
+        return;
+    }
+    document.getElementById("FileSelector").addEventListener("change", fileSelector_onChange, false);
+}
+</script>
+</head>
+
+<body>
+
+<div style="position:relative; width:100%; height:4em">
+    <h3>
+        gp21-tools Text Tape Image to retro-lgp21 .ptx Tape Image Converter
+    </h3>
+    <div>
+        <input id=FileSelector type=file size=60 accept=".txt">
+    </div>
+
+</div>
+
+<pre id=TextPanel>
+</pre>
+
+</body>
+</html>
