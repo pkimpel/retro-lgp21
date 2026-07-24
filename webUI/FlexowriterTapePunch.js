@@ -5,10 +5,24 @@
 * Licensed under the MIT License, see
 *       http://www.opensource.org/licenses/mit-license.php
 ************************************************************************
-* LGP-21 emulator Flexowriter tape punch.
+* General Precision LGP-21 Tally 151 Paper Tape Punch device.
 *
-* Defines the paper tape output device for the Flexowriter. See
-* FlexowriterTapeReader.js for a description of the tape formats supported.
+* There are two paper-tape image formats. The first is ".ptp", used for
+* binary tape images. Each tape frame is represented as one byte with the
+* bits arranged thus:
+*
+*       _ _ 6 1 2.3 4 5
+*
+* where the bits are numbered according to the convention used by the
+* LGP-21 processor. The "_" are unused bits and should be zero. The "."
+* represents the location of the sprocket hole in the tape. Bits 6 and 5
+* are zone bits. Internally, the processor rotates the code to read as
+* 123456, so that both zone bits are on the low-order end.
+*
+* The second format is ".ptx". This format represents a tape as ASCII
+* text using mostly the same codes as would be typed on the Flexowriter.
+* Letter codes are interpreted case-insensitively. See the Flexowriter
+* wiki page for details on this image format.
 *
 ************************************************************************
 * 2026-04-08  P.Kimpel
@@ -20,12 +34,29 @@ export {FlexowriterTapePunch};
 import * as Util from "../emulator/Util.js";
 import * as IOCodes from "../emulator/IOCodes.js";
 import {Flexowriter} from "./Flexowriter.js";
-import {openPopup, computeTextPitch} from "./WebUIUtil.js";
+import {openPopup, btoaUint8, computeTextPitch} from "./WebUIUtil.js";
 
 
 class FlexowriterTapePunch {
 
     static bufferLimit = 0x3FFFF;       // maximum output that will be buffered (about 7 hours worth)
+
+
+    // Public Instance Properties
+
+    buffer = null;                      // internal tape image buffer
+    bufLength = 0;                      // current 0-relative index into buffer
+    busy = false;                       // an I/O is in progress
+    cyclePeriod = 0;                    // current tape frame period
+    doc = null;                         // window document object
+    feeding = false;                    // true it forward/rewind tape feeding is in progress
+    innerHeight = 0;                    // window specified innerHeight
+    menuConfig = null;                  // object to store window sizing while menu is open
+    menuOpened = false;                 // tape punch menu is currently open
+    nextFrameStamp = 0;                 // time that the next frame can be sent
+    tapeView = null;                    // tape characters view area
+    tapeViewLength = 0;                 // chars that will fit in the TPView box
+    window = null;                      // window object
 
 
     constructor(context, flexowriter) {
@@ -42,48 +73,37 @@ class FlexowriterTapePunch {
         this.window = flexowriter.window;
         this.doc = this.flexowriter.doc;
         this.tapeView = $$("PTView");
-        this.tapeViewLength = 50;       // chars that will fit in the TapeView box
-        this.feeding = false;           // true when punching Tape Feed or Delete codes
         this.buffer = new Uint8Array(FlexowriterTapePunch.bufferLimit+1);
 
         this.boundMenuClick = this.menuClick.bind(this);
         this.boundFeedTape = this.feedTape.bind(this);
         this.boundDeleteCode = this.deleteCode.bind(this);
 
-        this.clear();
+        this.setPunchEmpty();
 
         $$("PTMenuIcon").addEventListener("click", this.boundMenuClick);
         this.flexowriter.tapeFeedLever.addEventListener("mousedown", this.boundFeedTape);
         this.flexowriter.codeDeleteLever.addEventListener("mousedown", this.boundDeleteCode);
 
         // Do offsetting window resizes after loading calms down a bit to force
-        // recalculation of the number of characters the TapeView box can display.
+        // recalculation of the number of characters the PTView box can display.
         this.tapeView.value = "_";
         this.window.setTimeout(() => {
             this.window.resizeBy(-4, 0);
             this.window.setTimeout(() => {
                 this.window.resizeBy(4, 0);
-                this.tapeView.value = " ";
+                this.tapeView.value = "";
             }, 500);
         }, 500);
     }
 
     /**************************************/
-    clear() {
-        /* Initializes (and if necessary, creates) the punch unit state */
-
-        this.canceled = false;          // current I/O canceled
-        this.setPunchEmpty();
-    }
-
-    /**************************************/
     resizeWindow(ev) {
         /* Handles the window onresize event. Calculates the width of the
-        TapeView text box element in terms of characters of monospaced text so
-        we'll know how  much text to show in the TapeView text box element
+        PTView text box element in terms of characters of monospaced text so
+        we'll know how  much text to show in the PTView text box element
         without overflow (Chrome doesn't properly display text that exceeds the
-        size of a right-justified text box). Adapted from retro-1620 and
-        https://www.geeksforgeeks.org/calculate-the-width-of-the-text-in-javascript/ */
+        size of a right-justified text box) */
 
         const pitch = computeTextPitch(this.window, this.tapeView);
         this.tapeViewLength = Math.floor(this.tapeView.clientWidth/pitch);
@@ -97,12 +117,25 @@ class FlexowriterTapePunch {
     }
 
     /**************************************/
+    updateTapeView(char) {
+        /* Updates the TRTapeView display with the code just punched */
+        const view = this.tapeView.value;           // current tape view contents
+
+        if (view.length < this.tapeViewLength) {
+            this.tapeView.value = view + char;
+        } else {
+            this.tapeView.value = view.slice(1-this.tapeViewLength) + char;
+        }
+    }
+
+    /**************************************/
     setPunchEmpty() {
         /* Empties the punch output buffer */
 
         this.buffer.fill(0);            // punch output buffer
         this.bufLength = 0;             // current output buffer length (characters)
         this.tapeView.value = "";
+        this.tapeView.classList.remove("bufferFull");
         this.feeding = false;
     }
 
@@ -114,54 +147,11 @@ class FlexowriterTapePunch {
     }
 
     /**************************************/
-    btoaUint8(bytes, start, end) {
-        /* Converts a Uint8Array directly to base-64 encoding without using
-        window.btoa and returns the base-64 string. "start" is the 0-relative
-        index to the first byte; "end" is the 0-relative index to the ending
-        byte + 1. Adapted from https://gist.github.com/jonleighton/958841 */
-        let b64 = "";
-        const byteLength = end - start;
-        const remainderLength = byteLength % 3;
-        const mainLength = byteLength - remainderLength;
-
-        const encoding = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-        // Main loop deals with bytes in chunks of 3.
-        for (let i=start; i<mainLength; i+=3) {
-            // Combine the three bytes into a single integer.
-            const chunk = (((bytes[i] << 8) | bytes[i+1]) << 8) | bytes[i+2];
-
-            // Extract 6-bit segments from the triplet and convert to the ASCII encoding.
-            b64 += encoding[(chunk & 0xFC0000) >> 18] +
-                   encoding[(chunk &  0x3F000) >> 12] +
-                   encoding[(chunk &    0xFC0) >>  6] +
-                   encoding[chunk &      0x3F];
-        }
-
-        // Deal with any remaining bytes and padding.
-        if (remainderLength == 1) {
-           // Encode the high-order 6 and low-order 2 bits, and add padding.
-           const chunk = bytes[mainLength];
-           b64 += encoding[(chunk & 0xFC) >> 2] +
-                  encoding[(chunk & 0x03) << 4] + "==";
-        } else if (remainderLength == 2) {
-           // Encode the high-order 6 bits of the first byte, plus the low-order
-           // 2 bits of the first byte with the high-order 4 bits of the second
-           // byte, and add padding.
-           const chunk = (bytes[mainLength] << 8) | bytes[mainLength+1];
-           b64 += encoding[(chunk & 0xFC00) >> 10] +
-                  encoding[(chunk &  0x3F0) >> 4] +
-                  encoding[(chunk &    0xF) << 2] + "=";
-        }
-
-        return b64;
-    }
-
-    /**************************************/
     extractTape() {
-        /* Copies the text contents of the "paper" area of the device, opens a new
-        temporary window, and pastes that text into the window so it can be copied
-        or saved by the user */
+        /* Copies the text contents of the punch buffer of the device, opens a
+        new temporary window, and pastes that text into the window so it can be
+        copied, printed, or saved by the user. All characters are ASCII according
+        to the convention used by the retro-lgp21 Flexowriter */
 
         openPopup(this.window, "./FramePaper.html", "",
                 "scrollbars,resizable,width=500,height=500",
@@ -207,11 +197,13 @@ class FlexowriterTapePunch {
             text += "\n";
         }
 
-        const url = `data:text/plain,${encodeURIComponent(text)}`;
-        const hiddenLink = this.doc.createElement("a");
-        hiddenLink.setAttribute("download", "retro-lgp21-Flexowriter-Tape.ptx");
-        hiddenLink.setAttribute("href", url);
-        hiddenLink.click();
+        if (this.bufLength > 0) {
+            const url = `data:text/plain,${encodeURIComponent(text)}`;
+            const hiddenLink = this.doc.createElement("a");
+            hiddenLink.setAttribute("download", "retro-lgp21-Flexowriter-Tape.ptx");
+            hiddenLink.setAttribute("href", url);
+            hiddenLink.click();
+        }
     }
 
     /**************************************/
@@ -222,12 +214,14 @@ class FlexowriterTapePunch {
 
         // Eventually btoaUint8() should be replaced with ArrayBuffer.toBase64().
 
-        const url = "data:application/octet-stream;base64," +
-                    this.btoaUint8(this.buffer, 0, this.bufLength);
-        const hiddenLink = this.doc.createElement("a");
-        hiddenLink.setAttribute("download", "retro-lgp21-Flexowriter-Tape.ptp");
-        hiddenLink.setAttribute("href", url);
-        hiddenLink.click();
+        if (this.bufLength > 0) {
+            const url = "data:application/octet-stream;base64," +
+                        btoaUint8(this.buffer, 0, this.bufLength);
+            const hiddenLink = this.doc.createElement("a");
+            hiddenLink.setAttribute("download", "retro-lgp21-Flexowriter-Tape.ptp");
+            hiddenLink.setAttribute("href", url);
+            hiddenLink.click();
+        }
     }
 
     /**************************************/
@@ -286,22 +280,16 @@ class FlexowriterTapePunch {
         parent Flexowriter device. The parent device will also filter out
         non-Flexowriter tape codes. Returns 0 if successful or -1 if the
         code cannot be written (due to buffer full) */
-        let char = IOCodes.ioTapeCodeToASCII[code];
+        const char = IOCodes.ioTapeCodeToASCII[code];
         let result = 0;
 
         if (this.bufLength >= FlexowriterTapePunch.bufferLimit) {
+            this.tapeView.classList.add("bufferFull");
             result = -1;
         } else {
             this.buffer[this.bufLength] = code;
             ++this.bufLength;
-
-            // Update the tape view control
-            let view = this.tapeView.value; // current tape view contents
-            if (view.length < this.tapeViewLength) {
-                this.tapeView.value = view + char;
-            } else {
-                this.tapeView.value = view.slice(1-this.tapeViewLength) + char;
-            }
+            this.updateTapeView(char);
         }
 
         return result;

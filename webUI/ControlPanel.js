@@ -435,7 +435,7 @@ class ControlPanel {
             runTime += now;
         }
 
-        this.runTime.textContent = ((runTime-this.runTimeOffset)/1000).toFixed(2).padStart(9, "0");
+        this.runTime.textContent = ((runTime-this.runTimeOffset)/1000).toFixed(1).padStart(8, "0");
         const deltaRT = runTime - this.lastRunTime;
         if (deltaRT) {
             this.avgInstructionRate = this.avgInstructionRate*Processor.statsAlpha1 +
@@ -927,6 +927,7 @@ class ControlPanel {
             if (!(p.blocked)) {
                 this.setResultMsg("Load Memory requires the Processor to be halted", 5);
             } else {
+                this.$$("DebugLoadMemSelector").value = null;
                 this.$$("DebugLoadMemDiv").style.display = "block";
                 this.$$("DebugLoadMemSelector").addEventListener("change", loadMemSelect);
                 this.$$("DebugLoadMemCancelBtn").addEventListener("click", () => {

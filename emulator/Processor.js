@@ -59,8 +59,8 @@ class RegisterP extends Register {
 
 class Processor {
 
-    static debugging = false;
-    static statsAlpha = 0.001;            // statistics averaging decay factor
+    static debugging = false;           // enables special debugging/development features
+    static statsAlpha = 0.001;          // statistics averaging decay factor
     static statsAlpha1 = 1-Processor.statsAlpha;
 
     // MODE switch values.
@@ -70,8 +70,8 @@ class Processor {
 
     // I/O Device codes.
     static devFlexowriter = 2;
-    static devTallyReader = 0;
-    static devTallyPunch = 6;
+    static devTallyTapeReader = 0;
+    static devTallyTapePunch = 6;
 
     // Instruction order codes.
     static opSenseHalt = 0;
@@ -282,15 +282,15 @@ class Processor {
         just a 4/6-bit left shift. This routine is normally called from Phase 3,
         using the track number from the instruction in the upper 5 bits of P */
 
-        // *** NOTE: The Tally reader and punch are temporarily redirected to the Flexowriter.
-
         switch (deviceCode & 0b111110) {
-        case Processor.devTallyReader:  // Tally 141 tape reader
-            // no-break;                        // not implemented yet...
-        case Processor.devTallyPunch:   // Tally 151 tape punch
-            // no-break;                        // not implemented yet...
-        case Processor.devFlexowriter:  // Flexowriter 121 typewriter/reader/punch
-            this.activeIODevice = this.context.devices.flexowriter;
+        case Processor.devFlexowriter:          // Flexowriter 121 typewriter/reader/punch
+            this.activeIODevice = this.context.devices.flexowriter ?? null;
+            break;
+        case Processor.devTallyTapeReader:      // Tally 141 tape reader
+            this.activeIODevice = this.context.devices.tallyTapeReader ?? null;
+            break;
+        case Processor.devTallyTapePunch:       // Tally 151 tape punch
+            this.activeIODevice = this.context.devices.tallyTapePunch ?? null;
             break;
         default:        // invalid device
             this.activeIODevice = null;
@@ -324,14 +324,22 @@ class Processor {
             in Phase 3, but the I/O operation cannot be terminated, so the first
             4 bits of P are unconditionally rotated through the A register.
         If no I/O is in progress, returns -1; if an error occurs while waiting
-        to be for input, returns that error code; otherwise returns 0 */
+        for input, returns that error code; otherwise returns 0 */
         let result = 0;
+
+        if (Processor.debugging) {
+            console.debug(`receiveInputCode: code=${code.toString(2).padStart(6, "0")}, I/O=${this.activeIODevice!==null}, wait=${this.waitingIODevice}`);
+        }
 
         // If we're not currently doing I/O, or the I/O has finished, reject the code.
         if (this.activeIODevice === null || this.X.value) {
             result = -1;
         } else {
             if (!this.waitingIODevice) {        // let's not get ahead of our skis...
+                if (Processor.debugging) {
+                    console.debug("receiveInputCode: Waiting I/O Device");
+                }
+
                 result = await this.readyForInput.wait();
             }
 
@@ -607,9 +615,6 @@ class Processor {
         this.R.value = word;
         this.C.incAddress();            // increment instruction counter
 
-        // Load P with the track field plus the high-order bit of the sector
-        // field (a holdover from the LGP-30 6-bit track and 6-bit sector fields).
-        this.P.value = (word & Util.addressMask) >>> (Util.trackShift-1);
         this.G.value = 0;               // for display only
         this.K.value = 1;               //  "
         if (this.Q.Q1) {                // check if we're skipping this instruction
@@ -629,8 +634,15 @@ class Processor {
         Also used by I/O for various purposes */
         let nextPhase = 3;              // stay in this phase by default
 
-        this.order = (this.R.value & Util.orderMask) >>> Util.orderShift;
-        this.Q.value = this.order;
+        // Load P & Q if an I/O is not in progress (that would overwrite the current I/O tape code).
+        if (this.activeIODevice === null) {
+            // Load P with the track field plus the high-order bit of the sector
+            // field (a holdover from the LGP-30 6-bit track and 6-bit sector fields).
+            this.P.value = (this.R.value & Util.addressMask) >>> (Util.trackShift-1);
+
+            this.order = (this.R.value & Util.orderMask) >>> Util.orderShift;
+            this.Q.value = this.order;
+        }
 
         switch (this.order) {
         case Processor.opSenseHalt:     // Z=SENSE/HALT
@@ -654,15 +666,17 @@ class Processor {
                 if (code == IOCodes.icCondStop) {
                     // Terminate the I/O on a conditional stop code.
                     this.terminateIO();
-                    nextPhase = 1;      // fetch next instruction
+                    nextPhase = 1;                      // to fetch the next instruction
                 } else if (code == IOCodes.icTapeFeed || code == IOCodes.icDelete) {
                     // Ignore Tape Feed and Delete (rubout) codes
-                    nextPhase = 1;      // receive the next code
+                    nextPhase = 1;                      // to receive the next code
                     this.waitingIODevice = true;
+                    this.activeIODevice.sendCode();     // request the next code
                 } else if ((code & 0b000011) == 0 && this.K.value) {
                     // Ignore xxxx00 internal codes in 4-bit mode.
-                    nextPhase = 1;      // receive the next code
+                    nextPhase = 1;                      // to receive the next code
                     this.waitingIODevice = true;
+                    this.activeIODevice.sendCode();     // request the next code
                 } else {
                     // Just proceed to Phase 4 and rotate the received code into A.
                 }
@@ -755,12 +769,18 @@ class Processor {
                 this.P.value = shiftOut;
             }
 
-            if (this.P.value == IOCodes.icCondStop) {
-                this.terminateIO();             // Programmatically-induced conditional stop code
-            } else {
-                this.waitingIODevice = true;    // signal waiting for next code
-                if (this.readyForInput.waiting) {
-                    this.readyForInput.proceed(0);      // allow receiveInputCode() to proceed
+            if (this.activeIODevice) {          // not if it's just a Shift instruction
+                if (this.P.value == IOCodes.icCondStop) {
+                    this.terminateIO();         // Programmatically-induced conditional stop code
+                    if (Processor.debugging) {
+                        console.debug(`P4: A-shift I/O termination, P=${this.P.value.toString(2).padStart(6, "0")}, A=${this.A.value.toString(2).padStart(32, "0")}`);
+                    }
+                } else {
+                    this.waitingIODevice = true;        // signal waiting for next code
+                    this.activeIODevice.sendCode();     // request the next code
+                    if (this.readyForInput.waiting) {
+                        this.readyForInput.proceed(0);  // allow receiveInputCode() to proceed
+                    }
                 }
             }
             break;
@@ -780,7 +800,7 @@ class Processor {
         case Processor.opPrint:         // P: Print/Output/No-Op (4 or 6 bit)
             this.P.value = (this.A.value >>> 26) & 0b111111;
             this.Q.Q2 = 1;              // Do not block in next P1
-            this.Q.Q3 = 1;              // Indicate output order (used by P1 since Q is altered)
+            this.Q.Q3 = 1;              // Indicate output order (used by P1 since Q has been altered)
 
             /********** DEBUG PRINT **********  /
             console.debug(`<P4> Print: A=${Util.lgp21Hex(this.A.value)}` +

@@ -17,6 +17,8 @@ import {Processor} from "../emulator/Processor.js";
 import {ControlPanel} from "./ControlPanel.js";
 import {SystemConfig} from "./SystemConfig.js";
 import {Flexowriter} from "./Flexowriter.js";
+import {TallyTapeReader} from "./TallyTapeReader.js";
+import {TallyTapePunch} from "./TallyTapePunch.js";
 
 
 const globalLoad = (ev) => {
@@ -126,13 +128,23 @@ const globalLoad = (ev) => {
         context.devices = {};
         context.devices.flexowriter = new Flexowriter(context, true);
 
-        //if (config.getNode("PaperTapePunch.hasPaperTapePunch")) {
-        //    context.devices.paperPunch = new PaperTapePunch(context);
-        //}
+        switch (config.getNode("TallyTapeReader.mode")) {
+        case 1:
+            context.devices.tallyTapeReader = new TallyTapeReader(context);
+            break;
+        case 2:
+            context.devices.tallyTapeReader = context.devices.flexowriter;
+            break;
+        }
 
-        //if (config.getNode("PaperTapeReader.hasPaperTapeReader")) {
-        //    context.devices.paperReader = new PaperTapeReader(context);
-        //}
+        switch (config.getNode("TallyTapePunch.mode")) {
+        case 1:
+            context.devices.tallyTapePunch = new TallyTapePunch(context);
+            break;
+        case 2:
+            context.devices.tallyTapePunch = context.devices.flexowriter;
+            break;
+        }
     }
 
     /**************************************/
@@ -140,6 +152,7 @@ const globalLoad = (ev) => {
         /* Powers down the Processor and shuts down all of the panels and I/O devices */
         const processor = context.processor;
 
+        // Shut down the Processor and I/O.
         if (!processor.blocked) {
             processor.stop();
             processor.modeSwitch = Processor.modeOneOperation;  // to allow power down to succeed
@@ -151,6 +164,16 @@ const globalLoad = (ev) => {
             }
         }
 
+        // If the Tally devices were redirected to the Flexowriter, don't call shutdown() on them.
+        if (context.devices.tallyTapeReader === context.devices.flexowriter) {
+            context.devices.tallyTapeReader = null;
+        }
+
+        if (context.devices.tallyTapePunch === context.devices.flexowriter) {
+            context.devices.tallyTapePunch = null;
+        }
+
+        // Shutdown the I/O devices.
         for (const e in context.devices) {
             if (context.devices[e]) {
                 context.devices[e].shutDown();
@@ -158,6 +181,7 @@ const globalLoad = (ev) => {
             }
         }
 
+        // Power down the system and switch back to the emulator Home page.
         await processor.powerDown();
         $$("EmulatorFrame").style.visibility = "hidden";
 

@@ -1,0 +1,93 @@
+/***********************************************************************
+* retro-lgp21/webUI TallyTapePunch.css
+************************************************************************
+* Copyright (c) 2026, Paul Kimpel.
+* Licensed under the MIT License, see
+*       http://www.opensource.org/licenses/mit-license.php
+************************************************************************
+* General Precision LGP-21 emulator Tally 151 Paper Tape Punch style sheet.
+************************************************************************
+* 2026-06-12  P.Kimpel
+*   Original version, from retro-1620 PaperTapePunch.css
+***********************************************************************/
+
+#PunchBody {
+    height:             100%;
+    min-height:         100%;
+    overflow:           hidden;
+    padding:            0}
+
+#PunchDiv {
+    position:           absolute;
+    top:                0;
+    bottom:             0;
+    left:               0;
+    right:              0}
+
+#ControlsDiv {
+    position:           absolute;
+    top:                0;
+    left:               4px;
+    right:              0;
+    bottom:             0}
+#ControlsDiv > BUTTON {
+    width:              100px;
+    height:             24px;
+    font-weight:        bold;
+    border:             2px solid #999}
+
+#TPMenuIcon {
+    position:           absolute;
+    top:                4px;
+    left:               4px}
+
+#TPTapeFeedBtn {
+    position:           absolute;
+    top:                4px;
+    right:              8px}
+
+#TPView {
+    position:           absolute;
+    top:                44px;
+    left:               4px;
+    right:              calc(4px + 4px);
+    height:             14px;
+    transform:          translate(0, -50%);
+    text-align:         right;
+    font-size:          12px;
+    padding-left:       0;
+    background-color:   #FFE;
+    border:             1px solid #999}
+#TPView.bufferFull {
+    border:             1px solid #F00}
+
+#TPControlsMenu {
+    position:           absolute;
+    display:            none;
+    bottom:             8px;
+    left:               50%;
+    width:              calc(100% - 32px);
+    height:             40px;
+    transform:          translate(-50%, 0);
+    z-index:            12;  
+    text-align:         right;
+    padding-left:       8px;
+    padding-right:      8px;
+    background-color:   #FFE;
+    border:             1px solid #666;
+    border-radius:      6px;
+    box-shadow:         3px 3px 3px #666}
+#TPControlsMenu BUTTON {
+    position:           relative;
+    top:                50%;
+    width:              auto;
+    height:             24px;
+    transform:          translate(0, -50%);
+    color:              white;
+    background-color:   #666;
+    padding-left:       4px;
+    padding-right:      4px;
+    font-size:          12px;
+    line-height:        100%;
+    border:             1px solid #333;
+    box-shadow:         2px 2px 2px #999}

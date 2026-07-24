@@ -22,7 +22,8 @@
 *
 * The second format is ".ptx". This format represents a tape as ASCII
 * text using mostly the same codes as would be typed on the Flexowriter.
-* Letter codes are interpreted case-insensitively.
+* Letter codes are interpreted case-insensitively. See the Flexowriter
+* wiki page for details on this image format.
 *
 ************************************************************************
 * 2026-04-16  P.Kimpel
@@ -62,6 +63,7 @@ class FlexowriterTapeReader {
         this.bufferLevel = $$("PRBufferLevel");
 
         this.boundFileSelectorChange = this.fileSelectorChange.bind(this);
+        this.boundFormatSelectChange = this.formatSelectChange.bind(this);
         this.boundMenuClick = this.menuClick.bind(this);
         this.boundRewindReader = this.rewindReader.bind(this);
 
@@ -106,6 +108,7 @@ class FlexowriterTapeReader {
         this.bufIndex = 0;
         this.$$("PRFileSelector").value = null; // reset the control so the same file can be reloaded
         this.$$("PRFormatSelect").selectedIndex = 0;    // default to Auto
+        this.$$("PRFileSelector").accept = ".ptp,.ptx"; // default to both extensions for auto
         this.updateBufferLevel();
     }
 
@@ -175,7 +178,6 @@ class FlexowriterTapeReader {
         const imageLength = image.length;
         let bufLength = this.bufLength;
 
-        console.debug("Flexowriter Reader: load as PTP");
         this.prepareBuffer(imageLength);
         bufLength = this.bufLength;
 
@@ -198,7 +200,6 @@ class FlexowriterTapeReader {
         const imageLength = text.length;
         let code = 0;
 
-        console.debug("Flexowriter Reader: load as PTX");
         this.prepareBuffer(imageLength);
         let bufLength = this.bufLength;
 
@@ -216,42 +217,100 @@ class FlexowriterTapeReader {
     }
 
     /**************************************/
+    async formatSelectChange(ev){
+        /* Update file selector default extension list based on format selector*/
+        const formatSelect = this.$$("PRFormatSelect");
+        const formatIndex = formatSelect.selectedIndex;
+        const tapeFormat = formatSelect.options[formatIndex].value;
+
+        if (tapeFormat == "Auto") {
+            this.$$("PRFileSelector").accept = ".ptp,.ptx";
+        } else {
+            this.$$("PRFileSelector").accept = tapeFormat;
+        }
+    }
+
+    /**************************************/
     async fileSelectorChange(ev) {
         /* Handle the <input type=file> onchange event when files are selected.
-        For each file, load it and add it to the input buffer of the reader */
+        For each file, load it and add it to the input buffer of the reader.
+        Thanks to Bill Kuker for a better idea on how to handle Auto mode  */
         const fileList = ev.target.files;
         const formatSelect = this.$$("PRFormatSelect");
         const formatIndex = formatSelect.selectedIndex;
-        let tapeFormat = "Auto";
-
-        if (formatIndex > 0) {
-            tapeFormat = formatSelect.options[formatIndex].value;
-        }
+        const formatList = [];          // list of format to be applied to each file
+        let defaultFormat = "Auto";     // default format selection
+        let error = false;              // invalid format flag
+        let flx = 0;                    // index into formatList[]
+        let msg = "";                   // result message text
 
         this.flexowriter.stopTapeRead();
-        for (const file of fileList) {
-            const fileName = file.name;
-            let readAs = tapeFormat;
-            if (tapeFormat == "Auto") {
-                let x = fileName.lastIndexOf(".");
-                readAs = x < 0 ? ".ptp" : fileName.substring(x).toLowerCase();
-            }
-
-            console.debug(`readAs ${readAs} ${fileName} ${file.size} bytes`);
-            switch (readAs) {
-            case ".ptx":
-                this.loadAsPTX(await file.text());
-                break;
-            default:
-                this.loadAsPTP(await file.arrayBuffer());
-                break;
-            }
+        if (formatIndex > 0) {
+            defaultFormat = formatSelect.options[formatIndex].value;
         }
 
-        this.updateBufferLevel();
-        this.window.setTimeout(() => {
-            this.menuClose();
-        }, 2000);
+        // First, assign the image format for each file. If the selected format
+        // is "Auto", the file must have a ".ptp" (binary) or .ptx (text) extension.
+        for (const file of fileList) {
+            const fileName = file.name;
+            let readAs = defaultFormat;
+            if (readAs == "Auto") {
+                let x = fileName.lastIndexOf(".");
+                readAs = x < 0 ? "" : fileName.substring(x).toLowerCase();
+            }
+
+            switch (readAs) {
+            case ".ptp":
+            case ".ptx":
+                formatList[flx] = readAs;
+                break;
+            default:
+                error = true;
+                formatList[flx] = null;
+                msg += `\n>>${fileName}: invalid extension for Auto`;
+                break;
+            }
+
+            ++flx;
+        }
+
+        // Now load the files into the buffer based on their assigned format.
+        if (error) {
+            this.window.alert(`Load aborted:${msg}`);
+        } else {
+            flx = 0;
+            for (const file of fileList) {
+                const fileName = file.name;
+                let readAs = formatList[flx];
+                let info = `${fileName} loaded as ${readAs}, ${file.size} bytes`;
+
+                msg += ` • ${info}`;
+                console.debug(`Flexowriter Reader: ${info}`);
+                switch (readAs) {
+                case ".ptp":
+                    this.loadAsPTP(await file.arrayBuffer());
+                    break;
+                case ".ptx":
+                    this.loadAsPTX(await file.text());
+                    break;
+                default:                // should never happen
+                    error = true;
+                    this.window.alert(`>> LOAD ERROR >> ${fileName} invalid format ${readAs}`);
+                    break;
+                }
+
+                ++flx;
+            }
+
+            this.flexowriter.context.controlPanel.setResultMsg(msg, 7);
+            if (!error) {
+                this.updateBufferLevel();
+                this.window.setTimeout(() => {
+                    this.menuClose();
+                    this.$$("PRFileSelector").value = null;
+                }, 3000);
+            }
+        }
     }
 
     /**************************************/
@@ -264,6 +323,7 @@ class FlexowriterTapeReader {
             prMenu.style.display = "block";
             prMenu.addEventListener("click", this.boundMenuClick, false);
             this.$$("PRFileSelector").addEventListener("change", this.boundFileSelectorChange);
+            this.$$("PRFormatSelect").addEventListener("change", this.boundFormatSelectChange);
             this.updateBufferLevel();
         }
     }
@@ -275,8 +335,9 @@ class FlexowriterTapeReader {
 
         this.menuOpened = false;
         prMenu.removeEventListener("click", this.boundMenuClick, false);
-        prMenu.style.display = "none";
         this.$$("PRFileSelector").removeEventListener("change", this.boundFileSelectorChange);
+        this.$$("PRFormatSelect").removeEventListener("change", this.boundFormatSelectChange);
+        prMenu.style.display = "none";
     }
 
     /**************************************/

@@ -17,7 +17,7 @@
 
 export {SystemConfig};
 
-import {openPopup} from "./WebUIUtil.js";
+import {openPopup, editInteger} from "./WebUIUtil.js";
 
 class SystemConfig {
 
@@ -49,6 +49,14 @@ class SystemConfig {
             marginLeft: 1,
             columns: 132,
             tabs: "6,11,16,21,26,31,36,41,46,51,56,61,66,71,76,81,86,91,96,101,106,111,116,121,126"
+        },
+
+        TallyTapeReader: {
+            mode: 0                             // 0=none, 1=enabled, 2=redirect to Flexowriter
+        },
+
+        TallyTapePunch: {
+            mode: 0                             // 0=none, 1=enabled, 2=redirect to Flexowriter
         },
 
         WindowConfig: {
@@ -169,15 +177,24 @@ class SystemConfig {
         }
 
         // Apply structural updates if necessary.
-        if (SystemConfig.configVersion != this.configData.version) {
+        const config = this.configData;
+        if (SystemConfig.configVersion != config.version) {
             // Reserved for future use
         }
 
+        if (!config.TallyTapeReader) {
+            this.putNode("TallyTapeReader.mode", 2);    // v0.15: existing configs redirect to Flex
+        }
+
+        if (!config.TallyTapePunch) {
+            this.putNode("TallyTapePunch.mode", 2);     // v0.15: existing configs redirect to Flex
+        }
+
         // Delete/modify obsolete configuration properties.
-            // (RFE)
+            // (none at present)
 
         // Recursively merge any new properties from the defaults.
-        this.sortaDeepMerge(this.configData, SystemConfig.defaultConfig);
+        this.sortaDeepMerge(config, SystemConfig.defaultConfig);
     }
 
     /**************************************/
@@ -443,6 +460,12 @@ class SystemConfig {
         this.$$("Columns").value = cd.Flexowriter.columns;
         this.$$("TabStops").value = cd.Flexowriter.tabs;
 
+        // Tally Tape Reader
+        this.setListValue("TallyTapeReaderMode", cd.TallyTapeReader.mode);
+
+        // Tally Tape Punch
+        this.setListValue("TallyTapePunchMode", cd.TallyTapePunch.mode);
+
         this.$$("MessageArea").textContent = "LGP-21 System Configuration loaded.";
         this.window.focus();
     }
@@ -454,24 +477,12 @@ class SystemConfig {
         const id = ev.target.id;        // id of changed element
         let v = 0;
 
-        const editInteger = (s, min, max, caption) => {
-            let v = parseInt(s, 10);
-            if (isNaN(v)) {
-                this.window.alert(`${caption} invalid value: "${s}"`);
-            } else if (v < min || v > max) {
-                this.window.alert(`${caption} out of valid range (${min}, ${max})`);
-                v = NaN;
-            }
-
-            return v;
-        };
-
         switch (id) {
         case "SystemPersistentWin":
             this.$$("SystemMultiScreen").disabled = !ev.target.checked;
             break;
         case "MarginLeft":
-            v = editInteger(ev.target.value, 0, 255, "Margin Left");
+            v = editInteger(ev.target.value, 0, 255, "Margin Left", this.window.alert);
             if (!isNaN(v)) {
                 v = Math.max(v, 1);
                 cd.Flexowriter.marginLeft = v;
@@ -479,32 +490,43 @@ class SystemConfig {
             }
             break;
         case "Columns":
-            v = editInteger(ev.target.value, 0, 255, "Columns");
+            v = editInteger(ev.target.value, 0, 255, "Columns", this.window.alert);
             if (!isNaN(v)) {
                 cd.Flexowriter.columns = v;
                 ev.target.value = v;
             }
             break;
         case "TabStops":
-            let tabs = [];
-            let list = ev.target.value.split(",");
-            let lastTab = 0;
-            for (let stop of list) {
-                if (stop.trim().length > 0) {
-                    v = editInteger(stop, 1, 255, "Tab stop");
-                    if (isNaN(v)) {
-                        return;
-                    } else if (v <= lastTab) {
-                        this.window.alert(`Tab stop ${stop} out of order`);
-                        return;
-                    } else {
-                        lastTab = v;
-                        tabs.push(v);
+            {
+                let list = ev.target.value.split(",");
+                let lastTab = 0;
+                let tabs = [];
+                for (let stop of list) {
+                    if (stop.trim().length > 0) {
+                        v = editInteger(stop, 1, 255, "Tab stop", this.window.alert);
+                        if (isNaN(v)) {
+                            return;
+                        } else if (v <= lastTab) {
+                            this.window.alert(`Tab stop ${stop} out of order`);
+                            return;
+                        } else {
+                            lastTab = v;
+                            tabs.push(v);
+                        }
                     }
                 }
+
+                cd.tabs = tabs.join(",");
+                ev.target.value = cd.tabs;
             }
-            cd.tabs = tabs.join(",");
-            ev.target.value = cd.tabs;
+            break;
+        case "TallyTapeReaderMode":
+            v = ev.target.selectedIndex;
+            cd.TallyTapeReader.mode = v > 0 && v <= 2 ? v : 0;
+            break;
+        case "TallyTapePunchMode":
+            v = ev.target.selectedIndex;
+            cd.TallyTapePunch.mode = v > 0 && v <= 2 ? v : 0;
             break;
         }
     }

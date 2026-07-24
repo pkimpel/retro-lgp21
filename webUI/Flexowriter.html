@@ -61,15 +61,17 @@
                        title="Tape Buffer Remaining"></meter>
 
                 <div id=PRControlsMenu>
-                    <select id=PRFormatSelect>
+                    <select id=PRFormatSelect
+                            title="Select image file format &ndash; &quot;Auto&quot; selects by file-name extension">
                         <option value=Auto selected>Auto
-                        <option value=.ptp         >.ptp
-                        <option value=.ptx         >.ptx
+                        <option value=".ptp"       >.ptp (binary)
+                        <option value=".ptx"       >.ptx (text)
                     </select>
                     <div id=PRBufferStatus>Buffer <span id=PRBufferLevel>Empty</span></div>
-                    <button id=PRUnloadBtn>UNLOAD</button>
-                    <button id=PRMenuCloseBtn>CLOSE</button>
-                    <input id=PRFileSelector type=file size=40 multiple>
+                    <button id=PRUnloadBtn>Unload</button>
+                    <button id=PRMenuCloseBtn>Close</button>
+                    <input id=PRFileSelector type=file size=40 accept=".ptp,.ptx" multiple
+                           title="Must select image format before selecting files">
                 </div>
             </div>
 
@@ -79,14 +81,11 @@
                 <img id=PTMenuIcon src="./resources/icons8-menu-24.png" alt="Paper-Tape Punch menu icon"
                      title="Click to open the paper-tape punch menu">
                 <div id=PTControlsMenu>
-                    <button id=PTSavePTXBtn type=button
-                            title="Save as .ptx format (text)"
+                    <button id=PTSavePTXBtn type=button title="Save as .ptx format (text)"
                             >Save PTX</button>&nbsp;
-                    <button id=PTSavePTPBtn type=button
-                            title="Save as .ptp format (binary)"
+                    <button id=PTSavePTPBtn type=button title="Save as .ptp format (binary)"
                             >Save PTP</button>&nbsp;
-                    <button id=PTExtractBtn type=button
-                            title="Extract tape image as text to a new window"
+                    <button id=PTExtractBtn type=button title="Extract tape image as text to a new window"
                             >Extract</button>&nbsp;
                     <button id=PTClearBtn type=button>Clear</button>&nbsp;
                     <button id=PTMenuCloseBtn type=button>Close</button>
@@ -100,11 +99,18 @@
                  alt="Menu icon" title="Click to open menu">
 
             <div id=TypewriterMenu>
-                <button id=TypewriterExtractBtn type=button>Extract</button>&nbsp;
-                <button id=TypewriterPrintBtn type=button>Print</button>&nbsp;
-                <button id=TypewriterSaveBtn type=button>Save</button>&nbsp;
-                <button id=TypewriterClearBtn type=button>Clear</button>&nbsp;
-                <button id=TypewriterCloseBtn type=button>Close</button>
+                <div id=TypewriterButtonDiv>
+                    <button id=TypewriterExtractBtn type=button>Extract</button>&nbsp;
+                    <button id=TypewriterPrintBtn type=button>Print</button>&nbsp;
+                    <button id=TypewriterSaveBtn type=button>Save</button>&nbsp;
+                    <button id=TypewriterClearBtn type=button>Clear</button>&nbsp;
+                    <button id=TypewriterCloseBtn type=button>Close</button>
+                </div>
+                Margin Left <input id=MarginLeft class=rj type=text size=3 maxlength=3>,
+                Columns <input id=Columns class=rj type=text size=3 maxlength=3>,
+                Tab Stops:<br>
+                <input id=TabStops type=text size=80 maxlength=255>
+
             </div>
 
             <div id=TypeOMaticPanel>

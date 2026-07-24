@@ -31,7 +31,7 @@ import * as IOCodes from "../emulator/IOCodes.js";
 import {FlexoLever} from "./FlexoLever.js";
 import {FlexowriterTapePunch} from "./FlexowriterTapePunch.js";
 import {FlexowriterTapeReader} from "./FlexowriterTapeReader.js";
-import {openPopup, computeTextPitch} from "./WebUIUtil.js";
+import {openPopup, editInteger, computeTextPitch} from "./WebUIUtil.js";
 
 class Flexowriter {
 
@@ -173,6 +173,7 @@ class Flexowriter {
         this.boundPanelPaste = this.panelPaste.bind(this);
         this.boundStartTapeRead = this.startTapeRead.bind(this);
         this.boundStopReadStartComp = this.stopReadStartComp.bind(this);
+        this.boundToggleCondStop = this.toggleCondStop.bind(this);
         this.boundTogglePunchOn = this.togglePunchOn.bind(this);
         this.boundToggleManInput = this.toggleManInput.bind(this);
         this.boundTOMPanelClick = this.tomPanelClick.bind(this);
@@ -230,13 +231,7 @@ class Flexowriter {
 
         // Load the configuration preferences.
         const prefs = this.config.getNode("Flexowriter");
-        this.marginLeft = Math.min(Math.max(prefs.marginLeft, 1), Flexowriter.maxCols-16);
-        this.columns = Math.min(Math.max(prefs.columns, 16) + this.marginLeft, Flexowriter.maxCols);
-
-        const tabStops = this.parseTabStops(prefs.tabs || "", this.window);
-        if (tabStops !== null) {
-            this.tabStops = tabStops;
-        }
+        this.configureTypewriter(prefs.marginLeft, prefs.columns, prefs.tabs);
 
         this.$$("CaseIndicator").addEventListener("click", this.boundChangeCaseShift, false);
         this.lcBtn = this.$$("LCBtn");
@@ -294,8 +289,9 @@ class Flexowriter {
         this.paperDoc.addEventListener("keydown", this.boundPanelKeydown, false);
         this.doc.body.addEventListener("paste", this.boundPanelPaste, true);
         this.paperDoc.addEventListener("paste", this.boundPanelPaste, true);
-        this.manInputLever.addEventListener("click", this.boundToggleManInput);
+        this.condStopLever.addEventListener("click", this.boundToggleCondStop);
         this.punchOnLever.addEventListener("click", this.boundTogglePunchOn);
+        this.manInputLever.addEventListener("click", this.boundToggleManInput);
         this.startReadLever.addEventListener("click", this.boundStartTapeRead);
         this.stopReadLever.addEventListener("click", this.boundStopReadStartComp);
         this.startCompLever.addEventListener("click", this.boundStopReadStartComp);
@@ -306,14 +302,12 @@ class Flexowriter {
         while (!this.context.controlPanel?.doc) {
             await this.nextCycleTimer.set(250);
         }
+
         this.context.controlPanel.doc.addEventListener("keydown", this.boundPanelKeydown, false);
+        this.paper.focus();
 
         if (this.iframe) {
-            // Size the Flexowriter iframe to this.columns if possible.
-            const pitch = computeTextPitch(this.platen.contentWindow, this.paper);
-            const width = Math.round((this.columns+2)*pitch) + 12;  // allow for scrollbar & frame border
-            this.iframe.style.width = `${width}px`;
-            ////console.log("Flex width: %f, pitch: %f", width, pitch);
+            this.sizeIFrame();
         } else {
             // Recalculate scaling and offsets after initial window resize.
             this.config.restoreWindowGeometry(this.window,
@@ -330,6 +324,29 @@ class Flexowriter {
     }
 
     /**************************************/
+    configureTypewriter(marginLeft, columns, tabList) {
+        /* Configures the typewriter margin, carriage width, and tab stops */
+
+        this.marginLeft = Math.min(Math.max(marginLeft, 1), Flexowriter.maxCols-16);
+        this.columns = Math.min(Math.max(columns, 16) + this.marginLeft, Flexowriter.maxCols);
+
+        const tabStops = this.parseTabStops(tabList || "", this.window);
+        if (tabStops !== null) {
+            this.tabStops = tabStops;
+        }
+    }
+
+    /**************************************/
+    sizeIFrame() {
+        /* Sizes the Flexowriter iframe to fit this.columns if possible. CSS
+        max-width will constrain the iframe to its containing window */
+        const pitch = computeTextPitch(this.platen.contentWindow, this.paper);
+        const width = Math.round((this.columns+2)*pitch) + 12;  // allow for scrollbar & frame border
+
+        this.iframe.style.width = `${width}px`;
+    }
+
+    /**************************************/
     resizeWindow(ev) {
         /* Handles window resize events by scrolling the paper area to keep the
         bottom line in view and calling the tape reader's resize method */
@@ -341,6 +358,10 @@ class Flexowriter {
     /**************************************/
     cancel() {
         /* Cancels any input I/O currently in process */
+
+        if (Flexowriter.debugging) {
+            console.log(`Flexowriter: I/O canceled: writeActive=${this.writeActive}, sendActive=${this.sendActive}, readerActive=${this.readerActive}`);
+        }
 
         this.disableReader();
         this.nextCycleTimer.clear();    // cancel any pending cycle
@@ -372,7 +393,7 @@ class Flexowriter {
     }
 
     /**************************************/
-    parseTabStops(text, alertWin) {
+    parseTabStops(tabList, alertWin) {
         /* Parses a comma-delimited list of 1-relative tab stops. If the list is parsed
         successfully, returns an array of 0-relative tab stop positions; otherwise
         returns null. An alert is displayed on the window for the first parsing or
@@ -380,20 +401,19 @@ class Flexowriter {
         let copacetic = true;
         let tabStops = [];
 
-        if (text.search(/\S/) >= 0) {
+        if (tabList.search(/\S/) >= 0) {
             let lastCol = 0;
-            const cols = text.split(",");
+            const cols = tabList.split(",");
             for (let item of cols) {
                 const raw = item.trim();
                 if (raw.length > 0) {       // ignore empty fields
-                    const col = parseInt(raw, 10);
+                    const col = editInteger(raw, 1, 255, "Tab stop", alertWin.alert);
                     if (isNaN(col)) {
                         copacetic = false;
-                        alertWin.alert(`Tab stop "${raw}" is not numeric`);
                         break; // out of for loop
                     } else if (col <= lastCol) {
                         copacetic = false;
-                        alertWin.alert(`Tab stop "${raw}" is out of sequence`);
+                        alertWin.alert(`Tab stop "${raw}" is out of order`);
                         break; // out of for loop
                     } else {
                         lastCol = col;
@@ -443,6 +463,12 @@ class Flexowriter {
             this.manualInputLamp.classList.remove("lit");
             this.cancelTypeOMatic();
         }
+    }
+
+    /**************************************/
+    sendCode() {
+        /* Called by Processor when an INPUT command is active to indicate the
+        next input code should be sent. Not applicable to the Flexowriter */
     }
 
     /**************************************/
@@ -513,9 +539,18 @@ class Flexowriter {
     }
 
     /**************************************/
-    togglePunchOn() {
-        /* Toggles the Punch annunciator on the window */
+    toggleCondStop() {
+        /* Event handler for the COND STOP lever */
 
+        this.config.putNode("Flexowriter.condStopLever", this.condStopLever.state);
+    }
+
+    /**************************************/
+    togglePunchOn() {
+        /* Event handler for the PUNCH ON lever. Toggles the PUNCH annunciator
+        on the window */
+
+        this.config.putNode("Flexowriter.punchOnLever", this.punchOnLever.state);
         if (this.punchOnLever.state) {
             this.punchCaption.classList.add("active");
         } else {
@@ -531,6 +566,7 @@ class Flexowriter {
         off and START READ must be pressed to start reading and (if an Input is
         in progress) sending from the tape reader to the LGP-21 */
 
+        this.config.putNode("Flexowriter.manInputLever", this.manInputLever.state);
         if (this.manInputLever.state) {
             this.stopTapeRead();
             if (this.sendActive) {
@@ -551,13 +587,23 @@ class Flexowriter {
         /* Temporarily flashes the cursor character to indicate the keyboard
         is locked */
 
-        if (!this.invKeyFlashTimerToken) {
+        if (Flexowriter.debugging) {
+            console.debug(`FlashInvalidKey: token=${this.invKeyFlashTimerToken}`);
+        }
+
+        if (this.invKeyFlashTimerToken == 0) {  // prevent overlapping flashes
             let node = this.getLastPaperTextNode();
             node.nodeValue = node.nodeValue.slice(0, -1) + Flexowriter.invKeyChar;
+            if (Flexowriter.debugging) {
+                console.debug(`FlashInvalidKey: Replace cursor`);
+            }
             this.invKeyFlashTimerToken = this.window.setTimeout(() => {
                 node = this.getLastPaperTextNode();
                 node.nodeValue = node.nodeValue.slice(0, -1) + Flexowriter.cursorChar;
                 this.invKeyFlashTimerToken = 0;
+                if (Flexowriter.debugging) {
+                    console.debug(`FlashInvalidKey: Restore cursor`);
+                }
             }, Flexowriter.invKeyFlashTime);
         }
     }
@@ -576,11 +622,9 @@ class Flexowriter {
             this.writeActive = false;
         }
 
-        if (this.inputQueue.length > 0) {
-            // If the queue is not empty, get the next code.
-            this.dequeueInput();                // runs async
-        } else {
-            // If the tape reader is enabled, get the next code and enqueue it.
+        // If the queue would be empty and the tape reader is enabled,
+        // read the next code and enqueue it.
+        if (this.inputQueue.length <= 1) {
             if (this.readerActive) {
                 // Need to bump nextCycleTime by reader/typewriter speed differential...
                 this.nextCycleTime +=
@@ -588,10 +632,10 @@ class Flexowriter {
                         this.calcTiming(Flexowriter.defaultCyclePeriod);
                 code = this.tapeReader.read();
                 if (code < 0) {
-                    this.stopTapeRead();        // reader stopped (out of tape?)
+                    this.stopTapeRead();        // reader stopped or out of tape
                 } else {
                     if (code == IOCodes.ioCondStop && !this.condStopLever.state) {
-                        this.disableReader();   // COND STOP detected
+                        this.disableReader();   // Conditional-Stop code detected
                     }
 
                     this.enqueueInput(code);    // must be after disabling the reader
@@ -603,30 +647,34 @@ class Flexowriter {
     /**************************************/
     async dequeueInput() {
         /* Dequeues tape codes from the input queue for print, punch, or
-        transmission to the processor. Throttles output speed to the Flexowriter character
-        cycle. This routine sets a minimum cycle time, but printCode() and
-        friends may increase that according to need */
+        transmission to the processor until the queue is empty. Throttles
+        output speed to the Flexowriter character cycle. This routine sets a
+        minimum cycle time, but printCode() and friends may increase that
+        according to need */
 
-        if (this.inputQueue.length > 0 & !this.paused) {
+        while (this.inputQueue.length > 0 && !this.paused) {
             const cyclePeriod = this.calcTiming(Flexowriter.defaultCyclePeriod);
             const now = performance.now();
-            const delta = this.nextCycleTime - now;
-            let code = this.inputQueue.shift();
+            const delta = this.nextCycleTime - now;     // time until next cycle
+            const code = this.inputQueue[0];            // peek the head code in the queue
 
             if (Flexowriter.debugging) {
                 console.debug(`Dequeue:     ${code.toString(16).padStart(2, "0")}  ${code.toString(2).padStart(6, "0")}  ` +
                                            `P=${cyclePeriod}, D=${delta}, T=${this.nextCycleTime}`);
             }
 
-            if (delta <= 0) {
-                // If nextCycleTime is in the past, resynchronize to the Flexowriter's 10 cps cycle.
-                this.nextCycleTime = now - now%cyclePeriod + cyclePeriod;
-            } else {
-                // If nextCycleTime is in the future, wait for it.
+            // If nextCycleTime is in the future, wait for it; if it is more than one
+            // cyclePeriod in the past, resynchronize it to the Flexowriter's current cycle;
+            // otherwise, we're running a little behind, so just continue without waiting
+            // or changing nextCycleTime to at least partially catch up during this cycle.
+            if (delta > 0) {                            // nextCycleTime is in the future
                 await this.nextCycleTimer.set(delta);
+            } else if (delta + cyclePeriod < 0) {       // nextCycleTime > one cyclePeriod in the past
+                this.nextCycleTime = now - now%cyclePeriod + cyclePeriod;
             }
 
             await this.routeInput(code, cyclePeriod);
+            this.inputQueue.shift();    // delete from queue after code has been processed
         }
     }
 
@@ -782,7 +830,7 @@ class Flexowriter {
             await this.tomTimer.delayUntil(nextKeystrokeStamp);
 
             while(this.inputQueue.length > 0) {
-                await this.tomTimer.delayFor(Flexowriter.defaultCyclePeriod);
+                await this.tomTimer.set(Flexowriter.defaultCyclePeriod);
             }
 
             const key = this.tomBuffer[this.tomIndex];
@@ -1022,6 +1070,9 @@ class Flexowriter {
         const node = this.getLastPaperTextNode();
         const line = node.nodeValue;
         node.nodeValue = line.slice(0, -1) + "\n";
+        if (Flexowriter.debugging) {
+            console.debug(`printNewLine: Delete cursor`);
+        }
 
         const carriageDelay =
                 this.calcTiming((this.printerCol - this.marginLeft)*Flexowriter.fastCarriagePeriod);
@@ -1029,6 +1080,10 @@ class Flexowriter {
         this.nextCycleTime += cyclePeriod + carriageDelay;
         paper.appendChild(this.doc.createTextNode(
                 `${(" ").repeat(this.marginLeft-1)}${Flexowriter.cursorChar}`));
+        if (Flexowriter.debugging) {
+            console.debug(`printNewLine: Restore cursor`);
+        }
+
         if (this.isRed) {
             this.isRed = false;         // to force printRed() to do something
             this.printRed(true);
@@ -1252,7 +1307,7 @@ class Flexowriter {
 
                 const result = await this.processor.receiveInputCode(code);
                 if (result) {
-                    console.log(`**Flexowriter: Processor.receiveInputCode(${code}) returned ${result}`);
+                    console.debug(`**Flexowriter: Processor.receiveInputCode(${code}) returned ${result}`);
                 }
             }
         }
@@ -1321,17 +1376,75 @@ class Flexowriter {
     /**************************************/
     menuOpen() {
         /* Opens the Typewriter menu panel and wires up events */
+        const prefs = this.config.getNode("Flexowriter");
+
+        // Temporarily disable the global event registrations so that keystrokes
+        // and pastes will work in the menu text boxes.
+        this.doc.removeEventListener("keydown", this.boundPanelKeydown, false);
+        this.paperDoc.removeEventListener("keydown", this.boundPanelKeydown, false);
+        this.context.controlPanel.doc.removeEventListener("keydown", this.boundPanelKeydown, false);
+        this.doc.body.removeEventListener("paste", this.boundPanelPaste, true);
+        this.paperDoc.removeEventListener("paste", this.boundPanelPaste, true);
 
         this.$$("TypewriterMenu").style.display = "block";
         this.$$("TypewriterMenu").addEventListener("click", this.boundMenuClick, false);
+
+        this.$$("MarginLeft").value = prefs.marginLeft;
+        this.$$("Columns").value = prefs.columns;
+        this.$$("TabStops").value = prefs.tabs;
     }
 
     /**************************************/
     menuClose() {
-        /* Closes the Typewriter menu panel and disconnects events */
+        /* Edits the typewriter configuration fields, and if no error is present
+        closes the Typewriter menu panel and disconnects events */
+        const prefs = this.config.getNode("Flexowriter");
+        let error = false;
+        let updated = false;
 
-        this.$$("TypewriterMenu").removeEventListener("click", this.boundMenuClick, false);
-        this.$$("TypewriterMenu").style.display = "none";
+        const marginLeft =
+            editInteger(this.$$("MarginLeft").value, 1, Flexowriter.maxCols, "Tab stop", this.window.alert);
+        if (isNaN(marginLeft)) {
+            error = true;
+        } else if (prefs.marginLeft != marginLeft) {
+            updated = true;
+        }
+
+        const columns =
+            editInteger(this.$$("Columns").value, 32, Flexowriter.maxCols, "Columns", this.window.alert);
+        if (isNaN(columns)) {
+            error = true;
+        } else if (prefs.columns != columns) {
+            updated = true;
+        }
+
+        const tabList = this.$$("TabStops").value.trim();
+        const stops = this.parseTabStops(tabList || "", this.window);
+        if (stops === null) {
+            error = true;
+        } else if (prefs.tabs != tabList) {
+            updated = true;
+        }
+
+        if (!error) {
+            if (updated) {
+                this.config.putNode("Flexowriter.marginLeft", marginLeft);
+                this.config.putNode("Flexowriter.columns", columns);
+                this.config.putNode("Flexowriter.tabs", tabList);
+                this.configureTypewriter(marginLeft, columns, tabList);
+                this.sizeIFrame();
+            }
+
+            this.$$("TypewriterMenu").removeEventListener("click", this.boundMenuClick, false);
+            this.$$("TypewriterMenu").style.display = "none";
+
+            // Re-enable the global event registrations.
+            this.doc.addEventListener("keydown", this.boundPanelKeydown, false);
+            this.paperDoc.addEventListener("keydown", this.boundPanelKeydown, false);
+            this.context.controlPanel.doc.addEventListener("keydown", this.boundPanelKeydown, false);
+            this.doc.body.addEventListener("paste", this.boundPanelPaste, true);
+            this.paperDoc.addEventListener("paste", this.boundPanelPaste, true);
+        }
     }
 
     /**************************************/
@@ -1397,8 +1510,9 @@ class Flexowriter {
             this.paperDoc.removeEventListener("keydown", this.boundPanelKeydown, false);
             this.doc.body.removeEventListener("paste", this.boundPanelPaste, true);
             this.paperDoc.removeEventListener("paste", this.boundPanelPaste, true);
-            this.manInputLever.removeEventListener("click", this.boundToggleManInput);
+            this.condStopLever.removeEventListener("click", this.boundToggleCondStop);
             this.punchOnLever.removeEventListener("click", this.boundTogglePunchOn);
+            this.manInputLever.removeEventListener("click", this.boundToggleManInput);
             this.startReadLever.removeEventListener("click", this.boundStartTapeRead);
             this.stopReadLever.removeEventListener("click", this.boundStopReadStartComp);
             this.startCompLever.removeEventListener("click", this.boundStopReadStartComp);
