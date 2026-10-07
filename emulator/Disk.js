@@ -60,7 +60,7 @@ class RegisterC extends Register {
 
     getOverflow() {
         /* Returns the sign bit of the register. In the C register, this
-        indicated whether arithmetic overflow is set */
+        indicates whether arithmetic overflow is set */
 
         return (this.intVal & Util.wordSignMask) ? 1 : 0;
     }
@@ -138,11 +138,10 @@ class Disk {
         this.dbabort = null;            // IndexedDb abort handler
 
         // Build the double-precision registers (not implemented as part of the disk array).
-        this.regA = new Register(Util.wordBits, this, false);           // accumulator
-        this.regC = new RegisterC(Util.wordBits, this, false);          // instruction counter
-        this.regR = new Register(Util.wordBits, this, false);           // instruction word
-        this.regAStarLow = new Register(Util.wordBits, this, false);
-        this.regAStarHigh = new Register(Util.wordBits, this, false);
+        this.regA = new Register(Util.wordBits, this, false);   // accumulator, A.
+        this.regC = new RegisterC(Util.wordBits, this, false);  // instruction counter, C
+        this.regR = new Register(Util.wordBits, this, false);   // instruction word, R (aka I)
+        this.regAStar = 0n;                                     // double-precision (BigInt) register, A*
 
         this.setTiming(Disk.defaultRPM);
     }
@@ -289,6 +288,13 @@ class Disk {
         const word = this.diskMem[this.diskIndex];
 
         return word;
+    }
+
+    /**************************************/
+    readS1() {
+        /* Returns the current S1 track word */
+
+        return Disk.S1[this.L.value];
     }
 
     /**************************************/

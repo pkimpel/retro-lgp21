@@ -22,6 +22,7 @@ export const absWordMask = 0xEFFFFFFE;          // all 31 bits but the sign bit
 export const wordSignMask = 0x80000000;         // sign bit mask
 export const orderMask = 0x000F0000;            // instruction order bits (4)
 export const orderShift = 16;                   // bits to shift order field right
+export const highSectorMask = 0x0FE00000;       // high-order sector number field in S1 & C
 export const trackMask = 0x00003E00;            // address track bits (5)
 export const trackShift = 9;                    // bits to shift track field right
 export const sectorMask = 0x000001FC;           // address sector bits (7)

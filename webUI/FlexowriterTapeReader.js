@@ -282,7 +282,7 @@ class FlexowriterTapeReader {
             for (const file of fileList) {
                 const fileName = file.name;
                 let readAs = formatList[flx];
-                let info = `${fileName} loaded as ${readAs}, ${file.size} bytes`;
+                let info = `Loaded ${fileName} as ${readAs}, ${file.size} bytes`;
 
                 msg += ` • ${info}`;
                 console.debug(`Flexowriter Reader: ${info}`);

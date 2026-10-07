@@ -63,6 +63,12 @@ class Processor {
     static statsAlpha = 0.001;          // statistics averaging decay factor
     static statsAlpha1 = 1-Processor.statsAlpha;
 
+    // BigInt constants.
+    static abs64Mask =  0x7FFFFFFFFFFFFFFFn;
+    static sign64Mask = 0x8000000000000000n;
+    static low32Mask =          0xFFFFFFFFn;
+    static high32Mask = 0xFFFFFFFF00000000n;
+
     // MODE switch values.
     static modeOneOperation = 0;
     static modeManInput = 1;
@@ -110,8 +116,7 @@ class Processor {
         this.A  = this.disk.regA;                       // accumulator register
         this.C  = this.disk.regC;                       // instruction counter register
         this.R  = this.disk.regR;                       // current instruction word
-        this.AStarLow = this.disk.regAStarLow;          // double-precision register lower half
-        this.AStarHigh = this.disk.regAStarHigh;        // double-precision register upper half
+        this.AStar = this.disk.regAStar;                // double-precision register for M, N, D
 
         this.P = new RegisterP(6, this.disk, false);    // track Nr, I/O codes
         this.Q = new RegisterQ(4, this.disk, false);    // op code, misc flags
@@ -224,8 +229,6 @@ class Processor {
         this.C.updateLampGlow(gamma);
         this.R.updateLampGlow(gamma);
         this.A.updateLampGlow(gamma);
-        this.AStarLow.updateLampGlow(gamma);
-        this.AStarHigh.updateLampGlow(gamma);
         this.P.updateLampGlow(gamma);
         this.Q.updateLampGlow(gamma);
 
@@ -417,120 +420,217 @@ class Processor {
     }
 
     /**************************************/
-    multiplyStep(forN) {
-        /* Multiplies A by the operand word, generating a 62-bit result.
+    multiplyStep(forN, dataAddr) {
+        /* Multiplies the operand word by A, generating a 62-bit result.
         If "forN" is true, returns in A the 32 low-order bits of the result,
-        otherwise the 30 high-order bits. THIS IS A TEMPORARY SHIM UNTIL A
-        CORRECT ALGORITHM IS IMPLEMENTED */
-        let nextPhase = 4;              // continue in phase 4 until dummy timing completes
+        otherwise the 30 high-order bits. In the first word-time, A holds the
+        multiplier and the multiplicand is read from memory and transferred to R
+        (the instruction register). The double-precision product is developed
+        in the A* register. See Table 3-3 on page 3-31 of the LGP-21 Training
+        and Maintenance Manual for the values of the "state" variable */
+        let nextPhase = 4;              // default until the last word-time
+        const state = (((((this.F.value << 1) | this.G.value) << 1) | this.H.value) << 1) | this.P.P1;
 
-        if (this.H.value) {
-            if (this.P.value < 63) {
-                this.P.inc();           // increment the dummy cycle counter
-            } else {
-                const two32 =         0x100000000n;
-                const two64 = 0x10000000000000000n;
-                let multiplicand = this.A.value | 0;    // make sure these are in IEEE format
-                let multiplier = this.dataWord | 0;
-                let pSign = 0;
+        ////console.debug(`Multiply-${forN ? "N" : "M"} (${state.toString().padStart(2, "0")}) ` +
+        ////          (this.F.value ? "F " : "_ ") + (this.G.value ? "G " : "_ ") +
+        ////          (this.H.value ? "H " : "_ ") + (this.P.P1 ? "P1 " : "__ ") +
+        ////          (this.P.P5 ? "P5 " : "__ ") + (this.P.P6 ? "P6 " : "__ "));
+        ////          " C=" + (this.C.value >>> 0).toString(16).padStart(8, "0") +
+        ////          " S1=" + this.disk.readS1().toString(16).padStart(8, "0"));
 
-                if (multiplicand < 0) {
-                    pSign ^= 1;
-                    multiplicand = -multiplicand;
-                }
-
-                if (multiplier < 0) {
-                    pSign ^= 1;
-                    multiplier = -multiplier;
-                }
-
-                let p = BigInt(multiplicand) * BigInt(multiplier);
-                if (pSign) {
-                    p = two64 - p;
-                }
-
-                if (forN) {
-                    this.A.value = Number(p % two32) >>> 0;
-                } else {
-                    this.A.value = (Number(p/two32) << 1) >>> 0;
-                }
-
-                nextPhase = 1;
-                this.H.value = 0;
-                if (this.modeSwitch != Processor.modeNormal) {
-                    this.stop();
-                }
-            }
-        } else {
-            const dataAddr = (this.opWord & Util.addressMask) >>> Util.sectorShift; // for tracing
+        switch (state) {
+        case 12:        // Word-time 1 of phase 4, F G /H (P1 + /P1)
+        case 13:
             this.dataWord = this.disk.read();
             if (this.tracing) {
                 this.traceOperand(4, "Operand", dataAddr, this.dataWord);
             }
 
-            this.R.value = this.dataWord;
-            this.H.value = 1;           // set H to enable dummy timing cycles
-            this.P.value = 0;           // use P to count the dummy cycles
+            this.R.value = this.dataWord >>> 0;         // multiplicand
+            this.P.P5 = this.R.value & Util.wordSignMask;
+            this.P.P6 = this.A.value & Util.wordSignMask;
+            this.A.value &= ~Util.wordSignMask;
+            this.AStar = BigInt(this.A.value) << 33n;   // multiplier, shifted
+            this.F.value = 0;
+            this.G.value = 0;
+            this.H.value = 1;
+            this.P.P1 = 1;                              // so that P1 will be 0 in WT 2
+            ////console.debug(`A=${this.A.value.toString(16).padStart(8, "0")} ` +
+            ////              `P5=${this.P.P5} ` +
+            ////              `R=${this.R.value.toString(16).padStart(8, "0")} ` +
+            ////              `P6=${this.P.P6}`);
+            break;
+
+        case 2:         // Word-time 2, /F /G H /P1
+            if (this.P.P6) {
+                this.AStar = (this.AStar & Processor.high32Mask) | BigInt.asUintN(32, -BigInt(this.R.value));
+            }
+
+            this.A.value = Number(this.AStar & Processor.low32Mask);            // for display only
+            break;
+
+        case 3:         // Word-time 3, /F /G H P1
+            if (this.P.P5) {
+                this.AStar -= Processor.high32Mask;
+            }
+
+            this.P.P6 = this.AStar & Processor.sign64Mask;
+            this.A.value = Number((this.AStar >> 32n) & Processor.low32Mask);   // for display only
+            this.AStar = BigInt.asUintN(64, this.AStar << 1n);
+            this.F.value = 1;           // change state for next set of word-times
+            break;
+
+        case 10:        // Word-times 4-64 even, F /G H /P1 (N ends here at WT 64)
+            if (this.P.P6) {
+                this.AStar += BigInt(this.R.value);
+            }
+
+            this.A.value = Number(this.AStar & Processor.low32Mask);            // for display only, except WT 64 for N
+
+            // Check for end of multiplication process.
+            this.K.value = (this.disk.readS1() & Util.highSectorMask) == (this.C.value & Util.highSectorMask);
+            if (this.K.value) {
+                if (!forN) {
+                    this.G.value = 1;   // enable extra word-times for M
+                } else {
+                    this.F.value = 0;
+                    this.H.value = 0;
+                    nextPhase = 1;      // leave low-order result in A and advance to next instruction
+                }
+            }
+            break;
+
+        case 11:        // Word-times 5-63 odd, F /G H P1
+        case 15:        // Word-time 65, F G H P1 (M only)
+            if (this.P.P6 && this.P.P5) {
+                this.AStar += Processor.high32Mask;
+            }
+
+            this.P.P6 = this.AStar & Processor.sign64Mask;
+            this.A.value = Number((this.AStar >> 32n) & Processor.low32Mask);   // for display only
+            this.AStar = BigInt.asUintN(64, this.AStar << 1n);
+            break;
+
+        case 14:        // Word time 66, F G H /P1 (M only, ends here)
+            this.A.value += this.A.value;
+            this.F.value = 0;
+            this.G.value = 0;
+            this.H.value = 0;
+            nextPhase = 1;      // leave high-order result in A and advance to next instruction
+            break;
+
+        default:
+            console.log(`Multiply Phase 4 invalid state: ${state}`);
+            debugger;
+            break;
         }
 
+        ////console.debug("A*=" + this.AStar.toString(2).padStart(64, "0") +
+        ////              " A=" + this.A.value.toString(2).padStart(32, "0"));
+
+        this.P.P1 = 1-this.P.P1;
         return nextPhase;
     }
 
     /**************************************/
-    divideStep() {
-        /* Divides A by the operand word, generating a 62-bit result, returning
-        the high-order bits of the result in A. THIS IS A TEMPORARY SHIM UNTIL
-        A CORRECT ALGORITHM IS IMPLEMENTED */
-        let nextPhase = 4;              // continue in phase 4 until dummy timing completes
+    divideStep(dataAddr) {
+        /* Divides A by the operand word, generating a 62-bit result of which
+        the high-order 30 bits is rounded and retained in A. The double-precision
+        quotient is developed in the A* register. See Table 3-4 on page 3-33 of
+        the LGP-21 Training and Maintenance Manual for the values of the "state"
+        variable */
+        let nextPhase = 4;              // default until the last word-time
+        const state = (((((this.F.value << 1) | this.G.value) << 1) | this.H.value) << 1) | this.P.P1;
+        const signFactor = (this.P.P5 ^ this.P.P6) ? 1 : -1;    // valid starting with WT 2
 
-        if (this.H.value) {
-            if (this.P.value < 63) {
-                this.P.inc();           // increment the dummy cycle counter
-            } else {
-                const two32 =         0x100000000n;
-                const two64 = 0x10000000000000000n;
-                const dividend = this.A.value | 0;      // make sure these are in IEEE format
-                const divisor = this.dataWord | 0;
-                let qSign = 0;
+        ////console.debug(`Divide (${state.toString().padStart(2, "0")}) ` +
+        ////          (this.F.value ? "F " : "_ ") + (this.G.value ? "G " : "_ ") +
+        ////          (this.H.value ? "H " : "_ ") + (this.P.P1 ? "P1 " : "__ ") +
+        ////          (this.P.P5 ? "P5 " : "__ ") + (this.P.P6 ? "P6 " : "__ "));
+        ////          ////" C=" + (this.C.value >>> 0).toString(16).padStart(8, "0") +
+        ////          ////" S1=" + this.disk.readS1().toString(16).padStart(8, "0"));
 
-                if (dividend < 0) {
-                    qSign ^= 1;
-                    dividend = -dividend;
-                }
-
-                if (divisor < 0) {
-                    qSign ^= 1;
-                    divisor = -divisor;
-                }
-
-                if (divisor < dividend) {       // also detects divide by zero
-                    this.C.setOverflow(1);      // just leave the dividend in A
-                } else {
-                    let q = BigInt(dividend)*two32 / BigInt(divisor) /2n;
-                    if (qSign) {
-                        q = two32 - q;
-                    }
-
-                    this.A.value = Number(q) >>> 0;
-                }
-
-                nextPhase = 1;
-                this.H.value = 0;
-                if (this.modeSwitch != Processor.modeNormal) {
-                    this.stop();
-                }
-            }
-        } else {
-            const dataAddr = (this.opWord & Util.addressMask) >>> Util.sectorShift; // for tracing
+        switch (state) {
+        case 12:        // Word-time 1 of phase 4, F G /H (P1 any)
+        case 13:
             this.dataWord = this.disk.read();
             if (this.tracing) {
                 this.traceOperand(4, "Operand", dataAddr, this.dataWord);
             }
 
-            this.H.value = 1;           // set H to enable dummy timing cycles
-            this.P.value = 0;           // use P to count the dummy cycles
+            this.R.value = this.dataWord >>> 0;         // denominator/divisor
+            this.P.P5 = this.R.value & Util.wordSignMask;
+            this.P.P6 = this.A.value & Util.wordSignMask;
+            this.A.value &= ~Util.wordSignMask;         // numerator/dividend
+            this.F.value = 0;
+            this.G.value = 0;
+            this.H.value = 1;
+            this.P.P1 = 1;                              // so that P1 will be 0 in WT 2
+            ////console.debug(`A=${this.A.value.toString(16).padStart(8, "0")} ` +
+            ////              `P5=${this.P.P5} ` +
+            ////              `R=${this.R.value.toString(16).padStart(8, "0")} ` +
+            ////              `P6=${this.P.P6}`);
+            break;
+
+        case 2:         // Word-time 2, /F /G H /P1
+            this.A.value = (((this.A.value | (this.P.P6*Util.wordSignMask)) >>> 0) +
+                           ((this.R.value*signFactor) >>> 0)) >>> 0;
+            this.AStar = BigInt(this.A.value);
+            break;
+
+        case 3:         // Word-time 3, /F /G H P1
+            this.F.value = 1;           // change state for next set of word-times
+            // Determine divide overflow (divisor <= dividend).
+            if (this.P.P6 && (this.A.value & Util.wordSignMask) ||
+               (!this.P.P6 && !(this.A.value & Util.wordSignMask))) {
+                this.C.setOverflow(1);
+            }
+            // no-break
+        case 11:        // Word-times 5-63 odd, F /G H P1
+        case 15:        // Word-time 65, F G H P1
+            this.P.P6 = this.A.value & Util.wordSignMask;
+            this.AStar = BigInt.asUintN(64, this.AStar << 1n);
+            this.A.value = Number(BigInt.asUintN(32, this.AStar >> 32n));       // for display only
+            break;
+
+        case 10:        // Word-times 4-64 even, F /G H /P1 (N ends here at WT 64)
+            this.A.value = (Number(this.AStar & Processor.low32Mask) + this.R.value*signFactor) >>> 0;
+            this.AStar = (this.AStar & Processor.high32Mask) | BigInt(this.A.value);
+
+            // Check for end of multiplication process.
+            this.K.value = (this.disk.readS1() & Util.highSectorMask) == (this.C.value & Util.highSectorMask);
+            if (this.K.value) {
+                this.G.value = 1;       // enable final word-times for D
+            }
+            break;
+
+        case 14:        // Word time 66, F G H /P1
+            this.A.value = (Number(this.AStar & Processor.low32Mask) + this.R.value*signFactor) >>> 0;
+            this.AStar = (this.AStar & Processor.high32Mask) | BigInt(this.A.value);
+            this.F.value = 0;
+            break;
+
+        case 7:         // Word time 67, /F G H P1, complement, round, & terminate division
+            this.A.value = Number(
+                               BigInt.asUintN(32,
+                                   ((BigInt.asUintN(64, this.P.P5 ? this.AStar : ~this.AStar) -
+                                   ((this.P.P5 ^ this.P.P6) ? 0n : Processor.high32Mask))) >> 32n
+                               ));
+            this.G.value = 0;
+            this.H.value = 0;
+            nextPhase = 1;              // leave result in A and advance to next instruction
+            break;
+
+        default:
+            console.log(`Multiply Phase 4 invalid state: ${state}`);
+            debugger;
+            break;
         }
 
+        ////console.debug("A*=" + this.AStar.toString(2).padStart(64, "0") +
+        ////              " A=" + this.A.value.toString(2).padStart(32, "0"));
+
+        this.P.P1 = 1-this.P.P1;
         return nextPhase;
     }
 
@@ -546,6 +646,9 @@ class Processor {
         Also used by I/O to delay until input is received or an output device
         is ready */
         let nextPhase = 1;              // stay in this phase by default
+
+        // Copy high-order sector number to C
+        this.C.value = (this.C.value & ~Util.highSectorMask) | (this.disk.readS1() & Util.highSectorMask);
 
         if (this.activeIODevice) {
             if (!this.Q.Q3) {           // Input I/O is active.
@@ -633,6 +736,9 @@ class Processor {
         and load the order code into the Q register.
         Also used by I/O for various purposes */
         let nextPhase = 3;              // stay in this phase by default
+
+        // Copy high-order sector number to C
+        this.C.value = (this.C.value & ~Util.highSectorMask) | (this.disk.readS1() & Util.highSectorMask);
 
         // Load P & Q if an I/O is not in progress (that would overwrite the current I/O tape code).
         if (this.activeIODevice === null) {
@@ -786,15 +892,15 @@ class Processor {
             break;
 
         case Processor.opDivide:        // D: Divide
-            nextPhase = this.divideStep();
+            nextPhase = this.divideStep(dataAddr);
             break;
 
         case Processor.opMultiplyLow:   // N: Multiply for low-order bits
-            nextPhase = this.multiplyStep(true);
+            nextPhase = this.multiplyStep(true, dataAddr);
             break;
 
         case Processor.opMultiply:      // M: Multiple for high-order bits
-            nextPhase = this.multiplyStep(false);
+            nextPhase = this.multiplyStep(false, dataAddr);
             break;
 
         case Processor.opPrint:         // P: Print/Output/No-Op (4 or 6 bit)
@@ -869,20 +975,20 @@ class Processor {
 
         // Check for blocked state at end of instruction (see MTM, p.3-25, 3-54).
         if (this.stopRequested) {
-            // If (Q1 is set [op P,E,U,T,H,C,A,S] or op is Input, enter blocked state.
-            if (this.Q.Q1 || this.Q.value == Processor.opInput) {
+            // If (Q1 is set [op P,E,U,T,H,C,A,S] or op is Input or end of D, M, N: enter blocked state.
+            if (this.Q.Q1 || this.order == Processor.opInput || !this.H.value) {
                 this.Q.Q2 = 0;
             }
         } else {
             // If Q2 is reset [op Z 00,B,Y,R,P,E,U,T], set Q2 to prevent blocked state.
-            if (!this.Q.Q2 && (this.Q.value != 0 || this.P.value != 0)) {
+            if (!this.Q.Q2 && (this.order != Processor.opSenseHalt || this.P.value != 0)) {
                 this.Q.Q2 = 1;
             }
         }
 
-        this.Q.Q1 = 0;                  // unconditionally reset skip indicator
+        this.Q.Q1 = 0;              // unconditionally reset skip indicator
         if (this.order == Processor.opSenseHalt) {
-            this.senseHalt();           // Z: Sense/Halt (may turn Q1 back on to command a skip)
+            this.senseHalt();       // Z: Sense/Halt (may turn Q1 back on to command a skip)
         }
 
         return nextPhase;
@@ -911,8 +1017,10 @@ class Processor {
             this.G.value = 0;
             break;
         case 4:
-            this.F.value = 1;
-            this.G.value = 1;
+            if (!this.H.value) {        // M, N, D phase 4 manipulates F & G specially
+                this.F.value = 1;
+                this.G.value = 1;
+            }
             break;
         }
     }
@@ -1088,7 +1196,7 @@ class Processor {
                 console.log("<EXECUTE>");
             }
 
-            this.stopRequested = true;  // force a single cycle (redundant here?)
+            this.stopRequested = true;  // force a single cycle
             this.lastOpEnded = false;
             this.run(3);                // runs async
         }
@@ -1207,9 +1315,9 @@ class Processor {
             this.poweredOn = true;
             console.log("<System Power Up>");
 
-            if (Processor.debugging && window.location.hostname == "localhost") {
-                this.loadMemory();                      // >>> DEBUG ONLY <<<
-            }
+            //if (Processor.debugging && window.location.hostname == "localhost") {
+            //    this.loadMemory();                      // >>> DEBUG ONLY <<<
+            //}
         }
     }
 

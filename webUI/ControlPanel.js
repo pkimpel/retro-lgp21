@@ -244,7 +244,6 @@ class ControlPanel {
         this.$$("GPLogoTurquoise").addEventListener("dblclick", this.boundOpenDebugPanel);
         this.$$("ControlsFrame").addEventListener("click", this.boundControlSwitchClick);
         this.$$("RunTimerDiv").addEventListener("dblclick", this.boundResetTiming);
-        this.$$("ButtonFrame").addEventListener("click", this.boundControlSwitchClick);
         this.powerBtn.addEventListener("dblclick", this.boundControlSwitchClick);
         this.$$("LGP21Version").addEventListener("dblclick", this.boundToggleTracing);
 
@@ -562,7 +561,7 @@ class ControlPanel {
 
     /**************************************/
     pauseEmulation() {
-        /* Pauses the emulation at the end of the current execytion phase and
+        /* Pauses the emulation at the end of the current execution phase and
         saves the state necessary to resume emulation with proper timing later */
 
         if (this.emulationPaused) {
@@ -1032,7 +1031,6 @@ class ControlPanel {
             this.$$("GPLogoTurquoise").removeEventListener("dblclick", this.boundOpenDebugPanel);
             this.$$("ControlsFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("RunTimerDiv").removeEventListener("dblclick", this.boundResetTiming);
-            this.$$("ButtonFrame").removeEventListener("click", this.boundControlSwitchClick);
             this.$$("LGP21Version").removeEventListener("dblclick", this.boundToggleTracing);
             this.powerBtn.removeEventListener("dblclick", this.boundControlSwitchClick);
 

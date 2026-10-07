@@ -61,6 +61,7 @@ class TallyTapePunch {
     menuConfig = null;                  // object to store window sizing while menu is open
     menuOpened = false;                 // tape punch menu is currently open
     nextFrameStamp = 0;                 // time that the next frame can be sent
+    paused = false;                     // true if emulation is currently paused
     tapeView = null;                    // tape characters view area
     tapeViewLength = 0;                 // chars that will fit in the TPView box
     window = null;                      // window object
@@ -414,11 +415,13 @@ class TallyTapePunch {
         let timerToken = 0;
 
         const punchFrame = () => {
-            if (this.feeding) {
+            if (this.paused) {
+                this.feeding = false;
+            } else if (this.feeding) {
                 const now = performance.now();
                 if (this.bufLength >= TallyTapePunch.bufferLimit) {
                     this.tapeView.classList.add("bufferFull");
-                    feeding = false;
+                    this.feeding = false;
                 } else {
                     this.buffer[this.bufLength] = IOCodes.ioTapeFeed;
                     ++this.bufLength;
@@ -446,6 +449,22 @@ class TallyTapePunch {
             this.feeding = false;
             break;
         }
+    }
+
+    /**************************************/
+    startPause(timestamp) {
+        /* Called by Processor to pause the emulation. This will inhibit
+        further dequeuing from the inputQueue */
+
+        this.paused = true;
+    }
+
+    /**************************************/
+    endPause(deltaTime) {
+        /* Called by Processor to resume the emulation. This will resume
+        dequeuing input codes from the inputQueue */
+
+        this.paused = false;
     }
 
     /**************************************/

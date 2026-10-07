@@ -75,6 +75,7 @@ class TallyTapeReader {
     menuConfig = null;                  // object to store window sizing while menu is open
     menuOpened = false;                 // tape reader menu is currently open
     nextFrameStamp = 0;                 // time that the next frame can be sent
+    paused = false;                     // true if emulation is currently paused
     ready = false;                      // a tape has been loaded into the reader
     tapeSupplyBar = null;               // input buffer meter bar
     tapeView = null;                    // tape characters view area
@@ -431,10 +432,10 @@ class TallyTapeReader {
             for (const file of fileList) {
                 const fileName = file.name;
                 let readAs = formatList[flx];
-                let info = `${fileName} loaded as ${readAs}, ${file.size} bytes`;
+                let info = `Loaded ${fileName} as ${readAs}, ${file.size} bytes`;
 
                 msg += ` • ${info}`;
-                console.debug(`Tally Reader: ${info}`);
+                ////console.debug(`Tally Reader: ${info}`);
                 switch (readAs) {
                 case ".ptp":
                     this.loadAsPTP(await file.arrayBuffer());
@@ -548,7 +549,7 @@ class TallyTapeReader {
         /* Called by Processor when an INPUT command is initiated. Starts the
         reader, which will continue until the Processor terminates the I/O */
 
-        console.debug("Tally Reader: enableSend");
+        ////console.debug("Tally Reader: enableSend");
         this.cyclePeriod = this.calcTiming(TallyTapeReader.defaultCyclePeriod);
         this.nextFrameStamp = performance.now() + this.cyclePeriod;
     }
@@ -559,7 +560,7 @@ class TallyTapeReader {
         next input code should be sent. Throttles the rate of sending to the
         reader's speed */
 
-        console.debug(`Tally Reader: sendCode, busy=${this.busy}`);
+        ////console.debug(`Tally Reader: sendCode, busy=${this.busy}`);
         if (this.busy) {
             console.error(`Tally Reader: sendCode called with busy=true, index=${this.bufIndex}`);
             console.trace();
@@ -602,7 +603,7 @@ class TallyTapeReader {
                 this.updateBufferLevel();
             }
 
-            console.debug(`Tally Reader: sending "${IOCodes.ioTapeCodeToASCII[code]}" ${code.toString(2).padStart(6, "0")}`);
+            ////console.debug(`Tally Reader: sending "${IOCodes.ioTapeCodeToASCII[code]}" ${code.toString(2).padStart(6, "0")}`);
             this.busy = false;
             const result = await this.processor.receiveInputCode(code);
             if (result) {
@@ -629,7 +630,9 @@ class TallyTapeReader {
         let timerToken = 0;
 
         const skipFrame = () => {
-            if (this.feeding && this.bufIndex < this.bufLength && !this.busy) {
+            if (this.paused) {
+                this.feeding = false;
+            } else if (this.feeding && this.bufIndex < this.bufLength && !this.busy) {
                 const now = performance.now();
                 const code = this.buffer[this.bufIndex];
                 ++this.bufIndex;
@@ -672,7 +675,9 @@ class TallyTapeReader {
         let timerToken = 0;
 
         const skipFrame = () => {
-            if (this.feeding && this.bufIndex > 0 && !this.busy) {
+            if (this.paused) {
+                this.feeding = false;
+            } else if (this.feeding && this.bufIndex > 0 && !this.busy) {
                 const now = performance.now();
                 --this.bufIndex;
                 const code = this.buffer[this.bufIndex];
@@ -705,6 +710,20 @@ class TallyTapeReader {
             this.updateTapeView(TallyTapeReader.forwardArrowHead);
             break;
         }
+    }
+
+    /**************************************/
+    startPause(timestamp) {
+        /* Called by Processor to pause the emulation */
+
+        this.paused = true;
+    }
+
+    /**************************************/
+    endPause(deltaTime) {
+        /* Called by Processor to resume the emulation */
+
+        this.paused = false;
     }
 
     /**************************************/
